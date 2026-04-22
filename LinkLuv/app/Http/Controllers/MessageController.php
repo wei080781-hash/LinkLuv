@@ -7,34 +7,33 @@ use App\Models\Message;
 
 class MessageController extends Controller
 {
+    public function index()
+    {
+        return Message::with('user')->orderBy('created_at', 'asc')->get();
+    }
+
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'content' => 'required|string|max:255',
-            'parent_id' => 'nullable|exists:messages,id',
+            'content' => 'required|string|max:1000',
             'image' => 'nullable|image|max:2048',
+            'parent_id' => 'nullable|exists:messages,id',
         ]);
+
+        $parentId = $request->input('parent_id');
+
+        $depth = 0;
+        if ($parentId) {
+            $parent = Message::find($parentId);
+            if ($parent) {
+                // 確保深度正確累加
+                $depth = $parent->depth + 1;
+            }
+        }
 
         $imagePath = null;
         if ($request->hasFile('image')) {
             $imagePath = $request->file('image')->store('messages', 'public');
-        }
-
-        $parentId = $validated['parent_id'] ?? null;
-        $depth = 0;
-
-        if ($parentId) {
-            $parent = Message::findOrFail($parentId);
-
-            if ($parent->depth >= 30) {
-                return back()->withErrors(['message' => '已達留言最大階層限制。']);
-            }
-
-            if ($parent->children()->count() >= 30) {
-                return back()->withErrors(['message' => '該留言已達回覆數量限制。']);
-            }
-
-            $depth = $parent->depth + 1;
         }
 
         $message = Message::create([
@@ -45,6 +44,26 @@ class MessageController extends Controller
             'image_path' => $imagePath,
         ]);
 
-        return back(303)->withFragment('message-' . $message->id);
+        return response()->json([
+            'success' => true,
+            'message' => $message->load('user')
+        ]);
+    }
+
+    public function destroy($id)
+    {
+        $message = Message::findOrFail($id);
+        
+        if (auth()->id() !== $message->user_id) {
+            return response()->json(['success' => false, 'message' => '無權刪除'], 403);
+        }
+
+        // 遞迴刪除所有子留言，避免外鍵約束錯誤
+        foreach ($message->children as $child) {
+            $child->delete();
+        }
+
+        $message->delete();
+        return response()->json(['success' => true]);
     }
 }

@@ -15,15 +15,16 @@ Route::get('/dashboard', function () {
 })->middleware(['auth', 'verified'])->name('dashboard');
 
 Route::get('/feed', function () {
-    $messages = Message::whereNull('parent_id')->get();
-    return view('feed', compact('messages'));
+    return view('feed');
 })->middleware(['auth', 'verified'])->name('feed');
 
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
-    Route::post('/messages', [MessageController::class, 'store']);
+    Route::post('/messages', [MessageController::class, 'store'])->name('messages.store');
+    Route::delete('/messages/{id}', [MessageController::class, 'destroy'])->name('messages.destroy');
+    Route::get('/api/messages', [MessageController::class, 'index']); // 更新 API 端點
 });
 
 Route::get('/profile/{id}', function ($id) {
