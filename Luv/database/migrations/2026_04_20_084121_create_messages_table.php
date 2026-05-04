@@ -13,8 +13,11 @@ return new class extends Migration
     {
         Schema::create('messages', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id');
+            $table->foreignId('user_id')->constrained()->onDelete('cascade');
             $table->text('content');
+            $table->foreignId('parent_id')->nullable()->constrained('messages')->onDelete('cascade');
+            $table->text('content');
+            $table->string('image_path')->nullable();
             $table->timestamps();
         });
     }
