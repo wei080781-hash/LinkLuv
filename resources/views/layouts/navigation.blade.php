@@ -4,8 +4,6 @@
 
         <div class="flex items-center gap-10 text-sm text-gray-700 font-bold"> 
             <a href="{{ route('dashboard') }}" class="hover:text-pink-600">生活牆</a>
-            <a href="#" class="hover:text-pink-600">同好圈</a>
-            <a href="#" class="hover:text-pink-600">默契配對</a>
         </div>
     </div>
 
