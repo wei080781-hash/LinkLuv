@@ -10,12 +10,14 @@ class MessageController extends Controller
     public function index()
     {
         $userId = auth()->id();
+
         return Message::with(['user'])
-        ->withCount('likes')// 這會自動產生 likes_count 欄位
-        ->withExists(['likes as is_liked' => function ($query) use ($userId) {
-            $query->where('user_id', $userId);
-        }])// 這會產生 is_liked (boolean) 欄位
-        ->orderBy('created_at', 'asc')->get();
+            ->withCount('likes')
+            ->withExists(['likes as is_liked' => function ($query) use ($userId) {
+                $query->where('user_id', $userId);
+            }])
+            ->orderBy('path', 'ASC')
+            ->get();
     }
     // 處理留言的儲存與列表獲取，並處理階層深度邏輯。
     public function store(Request $request)
@@ -29,24 +31,58 @@ class MessageController extends Controller
         ]);
 
         $parentId = $request->input('parent_id');
-
+        $imagePath = $request->hasFile('image') ? $request->file('image')->store('messages', 'public') : null;
+        
+        // 1.初始化深度與路徑
         $depth = 0;
-    if ($request->parent_id) {
-        $parent = Message::findOrFail($request->parent_id);
-        $depth = $parent->depth + 1;
-    }
+        $path = '';
+        $threadId1 = null;
 
-    $imagePath = $request->hasFile('image') ? $request->file('image')->store('messages', 'public') : null;
+        if ($parentId) {
+            $parent = Message::findOrFail($parentId);
+            $depth = $parent->depth + 1;
+            // 物化路徑：父路徑 + 暫存ID (這裡我們用一個假 ID 或之後再更新)
+            // 建議：先建立再更新路徑，或者使用一個遞增序號
+            $threadId = $parent->thread_id ?? $parent->id;
+        }
 
-    Message::create([
-        'content' => $request->content,
-        'user_id' => auth()->id(),
-        'parent_id' => $request->parent_id,
-        'depth' => $depth,
-        'image_path' => $imagePath,
-    ]);
+        // 先建立留言
+        $message = Message::create([
+            'user_id'   => auth()->id(),
+            'content'   => $request->content,
+            'parent_id' => $parentId,
+            'image_path' => $imagePath,
+            'depth'      => $depth, // 直接建立時寫入
+        ]);
+
+        // 3. 更新物化路徑 (Materialized Path)
+        $paddedId = str_pad($message->id, 10, '0', STR_PAD_LEFT); // 固定 10 位長度
+        $path = $parentId ? (Message::findOrFail($parentId)->path . '.' . $paddedId) : $paddedId;
+        $threadId = $parentId ? Message::findOrFail($parentId)->thread_id : $message->id;
+        
+        // 4. 更新路徑與正確的 thread_id
+        $message->update([
+            'path' => $path,
+            'depth' => $depth,
+            'thread_id' => $threadId
+        ]);
 
     return response()->json(['success' => true]);
+}
+
+private function storeClosure($descendantId, $parentId) 
+{
+    // 1. 建立自身關聯
+    \DB::table('message_closure')->insert(['ancestor' => $descendantId, 'descendant' => $descendantId]);
+    
+    // 2. 繼承父留言的所有祖先關係
+    $ancestors = \DB::table('message_closure')->where('descendant', $parentId)->get();
+    foreach ($ancestors as $a) {
+        \DB::table('message_closure')->insert([
+            'ancestor' => $a->ancestor,
+            'descendant' => $descendantId
+        ]);
+    }
 }
 
     public function destroy(Message $message)

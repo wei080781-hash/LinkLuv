@@ -18,7 +18,64 @@
 
 ---
 
-## 2. 前端渲染與提交邏輯 (feed.blade.php)
+## 2. 圖片上傳功能實現 (New Feature)
+
+### 2.1 後端邏輯 (MessageController.php)
+在 `store` 方法中，使用 `Request` 的 `hasFile` 與 `store` 方法處理上傳。
+
+```php
+public function store(Request $request)
+{
+    $validated = $request->validate([
+        'content' => 'required|string|max:1000',
+        'image' => 'nullable|image|max:2048', // 限制 2MB
+        'parent_id' => 'nullable|exists:messages,id',
+    ]);
+
+    // 將圖片儲存至 storage/app/public/messages
+    $imagePath = $request->hasFile('image') 
+        ? $request->file('image')->store('messages', 'public') 
+        : null;
+
+    Message::create([
+        'content' => $request->content,
+        'user_id' => auth()->id(),
+        'parent_id' => $request->input('parent_id'),
+        'image_path' => $imagePath,
+        // ... 其他欄位
+    ]);
+
+    return response()->json(['success' => true]);
+}
+```
+
+### 2.2 前端發送邏輯
+前端必須使用 `FormData` 進行 `fetch` 傳送，且**不可**指定 `Content-Type`（瀏覽器會自動設為 `multipart/form-data` 並包含正確的 boundary）。
+
+```javascript
+const formData = new FormData(formElement);
+fetch("{{ route('messages.store') }}", {
+    method: 'POST',
+    body: formData,
+    headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }
+});
+```
+
+### 2.3 圖片渲染
+在 JavaScript 的 `renderMessages` 函式中，透過動態字串拼接處理圖片路徑，以確保瀏覽器正確請求儲存的檔案：
+
+```javascript
+const imageHtml = msg.image_path ? `
+    <div class="mt-3">
+        <img src="/storage/${msg.image_path}" class="max-w-xs rounded-xl shadow-sm border border-gray-100">
+    </div>
+` : '';
+```
+*(註：此路徑假設專案部署於網域根目錄，且已執行 `php artisan storage:link` 建立軟連結)*
+
+---
+
+## 3. 前端渲染與提交邏輯 (feed.blade.php)
 這是修正後的完整 JavaScript 程式碼，確保留言與圖片上傳功能運作正常：
 
 ```javascript
@@ -89,22 +146,21 @@
 
 ---
 
-## 3. 開發檢查清單
+## 4. 開發檢查清單
 1.  **HTML 表單**: `<form>` 必須包含 `enctype="multipart/form-data"` 屬性。
 2.  **Storage**: 確保已執行 `php artisan storage:link`，以使 `/storage/` 路徑公開可讀。
 3.  **CSRF**: 頁面需包含 `<meta name="csrf-token" content="{{ csrf_token() }}">`。
 
-
 ---
 
-## 4. 留言刪除功能 (新功能)
+## 5. 留言刪除功能 (新功能)
 
-### 4.1 Route (routes/web.php)
+### 5.1 Route (routes/web.php)
 ```php
 Route::delete('/messages/{message}', [MessageController::class, 'destroy'])->name('messages.destroy');
 ```
 
-### 4.2 Controller (app/Http/Controllers/MessageController.php)
+### 5.2 Controller (app/Http/Controllers/MessageController.php)
 新增 `destroy` 方法：
 ```php
 public function destroy(Message $message)
@@ -126,7 +182,7 @@ public function destroy(Message $message)
 }
 ```
 
-### 4.3 Model (app/Models/Message.php)
+### 5.3 Model (app/Models/Message.php)
 確認關聯存在：
 ```php
 // 這是留言跟父留言的關聯
@@ -141,7 +197,7 @@ public function user()
 }
 ```
 
-### 4.4 前端 JS 刪除邏輯
+### 5.4 前端 JS 刪除邏輯
 ```javascript
 function deleteMessage(messageId) {
     if (!confirm('確定要刪除這則訊息嗎？')) return;
@@ -168,93 +224,16 @@ function deleteMessage(messageId) {
 }
 ```
 
-### 4.5 Migration 資料表欄位確認
-確認 `messages` table 具備 `user_id` 和 `parent_id`：
-```php
-Schema::create('messages', function (Blueprint $table) {
-    $table->id();
-    $table->foreignId('user_id')->constrained()->onDelete('cascade');
-    $table->foreignId('parent_id')->nullable()->constrained('messages')->onDelete('cascade'); // 回覆用
-    $table->text('content');
-    $table->string('image_path')->nullable();
-    $table->timestamps();
-});
-```
-
-
-
 ---
 
-## 5.4 實作編輯按鈕與串接邏輯 (完整代碼手冊)
+## 6. 留言編輯功能 (新功能)
 
-請將以下程式碼完整整合至 `resources/views/feed.blade.php` 的 `<script>` 標籤中。
-
-### 步驟 1: 新增 editMessage 函式
-此函式負責切換顯示模式，將內容區塊轉換為編輯框。請貼在 `deleteMessage` 函式下方：
-
-```javascript
-// 切換編輯模式 UI
-function editMessage(messageId) {
-    const messageDiv = document.querySelector(`#message-${messageId} p:nth-child(2)`);
-    const originalContent = messageDiv.innerText;
-
-    messageDiv.innerHTML = `
-        <textarea id="edit-textarea-${messageId}" class="w-full text-sm border rounded-lg p-2">${originalContent}</textarea>
-        <div class="flex gap-2 mt-2">
-            <button onclick="saveEdit(${messageId})" class="text-xs bg-blue-500 text-white px-2 py-1 rounded">儲存</button>
-            <button onclick="loadMessages()" class="text-xs bg-gray-300 text-black px-2 py-1 rounded">取消</button>
-        </div>
-    `;
-}
-```
-
-### 步驟 2: 新增 saveEdit 函式
-此函式處理與後端的數據更新 (PATCH)。請緊接在 `editMessage` 函式後方：
-
-```javascript
-// 呼叫後端執行更新 (PATCH)
-function saveEdit(messageId) {
-    const newContent = document.getElementById(`edit-textarea-${messageId}`).value;
-    
-    fetch(`/messages/${messageId}`, {
-        method: 'PATCH',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-        },
-        body: JSON.stringify({ content: newContent })
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (data.success) {
-            loadMessages(); // 儲存成功後重新載入列表
-        } else {
-            alert(data.message || '更新失敗');
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        alert('發生錯誤，請稍後再試');
-    });
-}
-```
-
-### 步驟 3: 確認 Controller 更新邏輯
-確保 `app/Http/Controllers/MessageController.php` 已正確定義 `update` 方法（參見 5.2 節）。
-
-### 步驟 4: 測試與除錯
-1. 點擊「編輯」按鈕，確認是否顯示 `<textarea>`。
-2. 修改內容後點擊「儲存」，查看瀏覽器開發者工具 (F12) 的 Network 分頁，確認 `PATCH /messages/{id}` 請求狀態為 200。
-3. 若發生錯誤，請先檢查 CSRF Token 是否正確帶入 Header。
-
-
-
-### 5.1 Route (routes/web.php)
+### 6.1 Route (routes/web.php)
 ```php
 Route::patch('/messages/{message}', [MessageController::class, 'update'])->name('messages.update');
 ```
 
-### 5.2 Controller (app/Http/Controllers/MessageController.php)
+### 6.2 Controller (app/Http/Controllers/MessageController.php)
 新增 `update` 方法：
 ```php
 public function update(Request $request, Message $message)
@@ -279,11 +258,227 @@ public function update(Request $request, Message $message)
 }
 ```
 
-### 5.3 前端 UI 與邏輯
-1. **編輯模式開關**: 在留言卡片中新增「編輯」按鈕，點擊後將內容區塊替換為 `textarea`。
-2. **提交與儲存**: 
-   - 建立 `updateMessage(messageId, newContent)` 函式。
-   - 使用 `fetch` 搭配 `PATCH` 方法傳送請求。
-   - 請求需帶入 `X-CSRF-TOKEN`。
-3. **完成後回渲染**: 成功更新後，透過 JavaScript 將 `textarea` 切換回內容顯示模式，並更新 DOM 內容。
+---
 
+## 7. 留言階層與排序：物化路徑 (Materialized Path) 實作方案
+
+為了完美解決留言的階層縮排與排序問題（確保子留言永遠緊跟在父留言下方），我們採用「物化路徑」方案，這是一種高效且業界標準的做法。
+
+### 7.1 資料庫結構設計
+我們透過 `path` 來記錄層級關係，並透過 `depth` 欄位直接提供前端渲染縮排資訊。
+
+#### 步驟 1: 新增欄位 (Migration)
+執行 `php artisan make:migration add_path_and_depth_to_messages_table --table=messages` 並加入以下欄位：
+
+```php
+public function up(): void
+{
+    Schema::table('messages', function (Blueprint $table) {
+        $table->string('path', 1024)->nullable()->index()->after('parent_id');
+        $table->unsignedTinyInteger('depth')->default(0)->after('path');
+    });
+}
+```
+
+#### 步驟 2: 更新模型 (Model)
+在 `app/Models/Message.php` 中加入新欄位至 `$fillable`：
+
+```php
+protected $fillable = [
+    'content', 'user_id', 'parent_id', 'thread_id', 'depth', 'path', 'image_path'
+];
+```
+
+---
+
+### 7.2 後端實作邏輯
+
+#### 1. 修改 `store` 方法 (MessageController.php)
+在留言建立後，計算路徑與深度並更新：
+
+```php
+public function store(Request $request)
+{
+    $validated = $request->validate([
+        'content' => 'required|string|max:1000',
+        'parent_id' => 'nullable|exists:messages,id',
+    ]);
+
+    $parentId = $request->input('parent_id');
+    
+    // 1. 先建立留言以取得 ID
+    $message = Message::create([
+        'user_id' => auth()->id(),
+        'content' => $request->content,
+        'parent_id' => $parentId,
+        'image_path' => $request->hasFile('image') ? $request->file('image')->store('messages', 'public') : null,
+    ]);
+
+    // 2. 計算路徑 (Padding ID 以確保字串排序正確)
+    $paddedId = str_pad($message->id, 10, '0', STR_PAD_LEFT);
+    $depth = 0;
+    
+    $parent = $parentId ? Message::findOrFail($parentId) : null;
+    
+    $path = $parent ? $parent->path . '.' . $paddedId : $paddedId;
+    $depth = $parent ? $parent->depth + 1 : 0;
+    $threadId = $parent ? $parent->thread_id : $message->id;
+
+    // 3. 更新路徑
+    $message->update(['path' => $path, 'depth' => $depth, 'thread_id' => $threadId]);
+
+    return response()->json(['success' => true]);
+}
+```
+
+#### 2. 修改 `index` 方法
+直接依據 `path` 進行排序，即可得到完美的樹狀順序：
+
+```php
+public function index()
+{
+    return Message::with(['user'])->orderBy('path', 'ASC')->get();
+}
+```
+
+---
+
+## 8. 人物氣泡框與連線設計 (Facebook 風格)
+
+本節紀錄了 Facebook 風格留言系統的「氣泡框與連線 (Connector)」完整渲染邏輯。
+
+### 8.1 核心渲染架構 (JavaScript)
+我們採用「分組 (Thread)」架構，確保連線能準確從根留言延伸至回覆留言。
+
+#### A. 主渲染函式
+此函式將後端返回的扁平數據轉為 Thread 分組，並呼叫渲染組件。
+
+```javascript
+function renderMessages(messages) {
+    const list = document.getElementById('messages-list');
+    list.innerHTML = '';
+    
+    const threads = [];
+    const threadMap = new Map(); // 關鍵：用 Map 來存 Root 與其對應的 Thread 物件
+
+    messages.forEach(msg => {
+        if (msg.depth === 0) {
+            // 它是根留言
+            const thread = { root: msg, replies: [] };
+            threads.push(thread);
+            threadMap.set(msg.id, thread); // 將 ID 記錄下來
+        } else {
+            // 它是回覆，需要找到它屬於哪個根留言
+            const rootThread = threadMap.get(msg.thread_id);
+            if (rootThread) {
+                rootThread.replies.push(msg);
+            } 
+        }
+    });
+
+    threads.forEach(thread => {
+        list.insertAdjacentHTML('beforeend', buildThread(thread.root, thread.replies));
+    });
+}
+```
+
+#### B. 遞迴組件渲染 (繪製連線)
+透過 `buildThread` 與 `buildReplyHTML` 繪製連線。
+
+```javascript
+// 建立一整串留言
+function buildThread(root, replies) {
+    const hasReplies = replies.length > 0;
+    const vLine = hasReplies ? `<div style="width:2px; flex:1; background:#d1d5db; border-radius:1px; margin-top:3px;"></div>` : '';
+
+    const repliesHTML = replies.map((reply, index) => {
+        const isLast = index === replies.length - 1;
+        return buildReplyHTML(reply, isLast);
+    }).join('');
+
+    return `
+    <div class="flex mb-6">
+        <div style="display:flex; flex-direction:column; align-items:center; flex-shrink:0; width:10px;">
+            <div style="width:9px; height:9px; margin-top:14px; border-radius:50%; border:2px solid #d1d5db; background:#fff; flex-shrink:0;"></div>
+            ${vLine}
+        </div>
+        <div style="flex:1; padding-left:10px;">
+            ${buildRootHTML(root)}
+            ${repliesHTML}
+        </div>
+    </div>
+    `;
+}
+
+// 根留言渲染
+function buildRootHTML(msg) {
+    const imageHtml = msg.image_path ? `
+        <div class="mt-3">
+            <img src="/storage/${msg.image_path}" class="max-w-xs rounded-xl shadow-sm border border-gray-100">
+        </div>
+    ` : '';
+
+    return `
+    <div id="message-${msg.id}" class="mb-4">
+        <div class="flex items-start gap-3">
+            <img src="${msg.user.avatar ?? '/user-avatar.jpg'}" class="w-10 h-10 rounded-full flex-shrink-0">
+            <div class="p-3 bg-gray-100 rounded-2xl shadow-sm">
+                <p class="text-xs font-semibold text-gray-700 mb-1">${msg.user.name}</p>
+                <p class="text-sm text-gray-800">${msg.content}</p>
+                ${imageHtml}
+            </div>
+        </div>
+        <div class="mt-1 flex gap-3 text-xs text-gray-400" style="padding-left:52px;">
+            <button onclick="toggleReply(${msg.id})" class="hover:text-blue-600">回覆</button>
+            <button onclick="deleteMessage(${msg.id})" class="hover:text-red-500">刪除</button>
+            <button onclick="editMessage(${msg.id})" class="hover:text-blue-600">編輯</button>
+            <button onclick="toggleLike(${msg.id})" class="flex items-center gap-1 ${msg.is_liked ? 'text-pink-500' : ''}">❤️ ${msg.likes_count || 0}</button>
+        </div>
+        <div id="reply-form-${msg.id}" class="hidden mt-2" style="padding-left:52px;">
+            <form onsubmit="submitReply(event, ${msg.id})" class="flex gap-2">
+                <input type="hidden" name="parent_id" value="${msg.id}">
+                <input type="text" name="content" required placeholder="回覆..." class="rounded-full text-sm px-4 py-1.5 border w-full">
+                <button type="submit" class="text-pink-600 text-sm font-bold px-3">送出</button>
+            </form>
+        </div>
+    </div>
+    `;
+}
+
+// 回覆留言渲染 (含連線計算)
+function buildReplyHTML(msg, isLast) {
+    const depth = msg.depth || 1;
+    const hLineWidth = 16 + (depth - 1) * 28;
+    const avatarSize = Math.max(24, 30 - (depth - 1) * 3);
+    const imageHtml = msg.image_path ? `<div class="mt-2"><img src="/storage/${msg.image_path}" class="max-w-xs rounded-xl shadow-sm border border-gray-100"></div>` : '';
+
+    return `
+    <div id="message-${msg.id}" style="display:flex; align-items:flex-start; margin-bottom:${isLast ? '4px' : '10px'}; margin-left:-16px;">
+        <div style="display:flex; align-items:center; flex-shrink:0; padding-top:10px;">
+            <div style="width:9px; height:9px; border-radius:50%; border:2px solid #d1d5db; background:#fff; flex-shrink:0;"></div>
+            <div style="width:${hLineWidth}px; height:2px; background:#d1d5db;"></div>
+        </div>
+        <div style="flex:1;">
+            <div style="display:flex; align-items:flex-start; gap:8px;">
+                <img src="${msg.user.avatar ?? '/user-avatar.jpg'}" style="width:${avatarSize}px; height:${avatarSize}px; border-radius:50%; flex-shrink:0;">
+                <div class="p-2 bg-gray-100 rounded-2xl shadow-sm" style="flex:1;">
+                    <p class="text-xs font-semibold text-gray-700 mb-1">${msg.user.name}</p>
+                    <p class="text-sm text-gray-800">${msg.content}</p>
+                    ${imageHtml}
+                </div>
+            </div>
+            <div style="padding-left:${avatarSize + 8}px;" class="mt-1 flex gap-3 text-xs text-gray-400">
+                <button onclick="toggleReply(${msg.id})" class="hover:text-blue-600">回覆</button>
+                <button onclick="deleteMessage(${msg.id})" class="hover:text-red-500">刪除</button>
+                <button onclick="editMessage(${msg.id})" class="hover:text-blue-600">編輯</button>
+            </div>
+        </div>
+    </div>
+    `;
+}
+```
+
+---
+
+## 6. 軟刪除 (Soft Deletes) 欄位缺失問題
+參見原始專案紀錄。

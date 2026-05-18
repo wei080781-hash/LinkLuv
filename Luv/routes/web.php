@@ -10,8 +10,7 @@ Route::get('/', function () {
 });
 
 Route::get('/dashboard', function () {
-    $messages = Message::whereNull('parent_id')->get();
-    return view('dashboard', compact('messages'));
+    return redirect()->route('feed');
 })->middleware(['auth', 'verified'])->name('dashboard');
 
 Route::get('/feed', function () {
@@ -30,6 +29,7 @@ Route::middleware('auth')->group(function () {
     // 更新訊息內容的路由
     Route::patch('/messages/{message}',
     [MessageController::class, 'update'])->name('messages.update');
+    Route::post('/messages/{message}/like', [MessageController::class, 'like'])->name('messages.like');
 });
 // 點擊使用者名稱後的個人頁面路由
 Route::get('/profile/{id}', function ($id) {

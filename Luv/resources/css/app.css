@@ -1,3 +1,21 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+@layer components {
+    /* 這裡定義連線的「形狀」 */
+    .has-connector {
+        @apply relative;
+    }
+    
+    /* 垂直線 */
+    .has-connector::before {
+        content: '';
+        @apply absolute -left-6 top-0 bottom-1/2 w-0.5 bg-gray-300;
+    }
+
+    /* 水平線 */
+    .has-connector::after {
+        content: '';
+        @apply absolute -left-6 top-1/2 w-6 h-0.5 bg-gray-300;
+    }
+}
