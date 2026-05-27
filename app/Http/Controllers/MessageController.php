@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\Message;
 
+
 class MessageController extends Controller
 {
     public function index()
@@ -26,12 +27,34 @@ class MessageController extends Controller
         \Log::info('Input', $request->except(['+']));
         $validated = $request->validate([
             'content' => 'required|string|max:1000',
-            'image' => 'nullable|image|max:2048',
             'parent_id' => 'nullable|exists:messages,id',
+            'media' => 'nullable|mimes:jpg,jpeg,png,gif,mp4,mov,ogg|  max:20480', // 把圖片和影片的格式全部寫在一起
         ]);
 
+
+
         $parentId = $request->input('parent_id');
-        $imagePath = $request->hasFile('image') ? $request->file('image')->store('messages', 'public') : null;
+        // 判斷圖片還是影片，並儲存路徑
+         $imagePath = null;
+         $videoPath = null;
+         $mediaType = null;
+
+        if ($request->hasFile('media')) {
+        $file = $request->file('media');
+        $mime = $file->getMimeType(); 
+        // 取得檔案的真正類型 (例如 image/jpeg 或 video/mp4)
+
+        if (str_contains($mime, 'image')) {
+            // 直接使用 storeAs，不需要 import Storage
+            // 參數：(資料夾, 隨機檔名, 磁碟名稱)
+            $imagePath = $file->storeAs('images', $file->hashName(), 'public');
+            $mediaType = 'image';
+        } elseif (str_contains($mime, 'video')) {
+            // 同理，直接使用 storeAs
+            $videoPath = $file->storeAs('videos', $file->hashName(), 'public');
+            $mediaType = 'video';
+        }
+    }
         
         // 1.初始化深度與路徑
         $depth = 0;
@@ -52,6 +75,8 @@ class MessageController extends Controller
             'content'   => $request->content,
             'parent_id' => $parentId,
             'image_path' => $imagePath,
+            'video_path' => $videoPath,
+            'media_type' => $mediaType,
             'depth'      => $depth, // 直接建立時寫入
         ]);
 

@@ -21,6 +21,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+
+    // 刪除頭像的路由
+    Route::delete('/profile/photo', [ProfileController::class, 'deletePhoto'])->name('profile.photo.delete');
+
     // 訊息相關路由
     Route::post('/messages', [MessageController::class, 'store'])->name('messages.store');
     Route::get('/api/messages', [MessageController::class, 'index']); // 更新 API 端點

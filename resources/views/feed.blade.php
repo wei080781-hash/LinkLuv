@@ -38,9 +38,22 @@
     function buildNodeHTML(msg, depth) {
         const avatarSize = depth === 0 ? 40 : 32;
         const paddingLeft = avatarSize + 12;
-        const imageHtml = msg.image_path
-            ? `<div class="mt-2"><img src="/storage/${msg.image_path}" class="max-w-xs rounded-xl shadow-sm border border-gray-100"></div>`
-            : '';
+        // const imageHtml = msg.image_path
+        //     ? `<div class="mt-2"><img src="/storage/${msg.image_path}" class="max-w-xs rounded-xl shadow-sm border border-gray-100"></div>`
+        //     : '';
+        let mediaHtml = '';
+        if (msg.media_type === 'image' && msg.image_path) {
+            mediaHtml = `<div class="mt-2"><img src="/storage/${msg.image_path}" class="max-w-xs rounded-xl shadow-sm border border-gray-100"></div>`;
+        } else if (msg.media_type === 'video' && msg.video_path) {
+            mediaHtml = `
+                <div class="mt-2">
+                   <video controls class="max-w-xs rounded-xl shadow-sm border border-gray-100">
+                          <source src="/storage/${msg.video_path}" type="video/mp4">
+                            您的瀏覽器不支援影片播放。
+                   </video>
+                </div>
+            `;
+        }
 
         // 修正縮排邏輯：只有 depth 為 0 的容器才需要考慮容器縮排，所有回覆 (depth >= 1) 一律強制平齊
         const childrenHTML = msg.children.length > 0
@@ -65,12 +78,12 @@
         <div id="message-${msg.id}" class="mb-3" style="position:relative;">
             <div style="display:flex; align-items:flex-start; position:relative;">
                 ${connector}
-                <img src="${msg.user.avatar ?? '/user-avatar.jpg'}"
+                <img src="${msg.user.profile_photo_url}"
                      style="width:${avatarSize}px; height:${avatarSize}px; border-radius:50%; flex-shrink:0; margin-right:8px; background:white; z-index:1;">
                 <div class="p-2 bg-gray-100 rounded-2xl shadow-sm" style="flex:1;">
                     <p class="text-xs font-semibold text-gray-700">${msg.user.name}</p>
                     <p class="text-sm text-gray-800">${msg.content}</p>
-                    ${imageHtml}
+                    ${mediaHtml}
                 </div>
             </div>
             <div class="mt-1 flex gap-3 text-xs text-gray-400" style="padding-left:${paddingLeft}px;">
