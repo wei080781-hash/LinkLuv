@@ -5,6 +5,8 @@ use App\Http\Controllers\ProfileController;
 use App\Models\Message;
 use Illuminate\Support\Facades\Route;
 
+// routes/web.php 加這行
+
 Route::get('/', function () {
     return view('welcome');
 });
@@ -39,6 +41,8 @@ Route::middleware('auth')->group(function () {
 Route::get('/profile/{id}', function ($id) {
     return view('profile.show', ['id' => $id]);
 })->name('profile.show');
+
+
 
 require __DIR__.'/auth.php';
 

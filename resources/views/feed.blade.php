@@ -150,9 +150,28 @@
     };
 
     window.submitPost = function(e) {
-        e.preventDefault();
-        fetch("{{ route('messages.store') }}", { method: 'POST', body: new FormData(e.target), headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content } })
-        .then(r => r.json()).then(d => { if(d.success) { loadMessages(); e.target.reset(); } });
+    e.preventDefault();
+
+        // 檢查檔案大小
+        const fileInput = e.target.querySelector('input[type="file"]');
+        if (fileInput && fileInput.files.length > 0) {
+            const file = fileInput.files[0];
+            const maxSize = 50 * 1024 * 1024; // 50MB
+
+            if (file.size > maxSize) {
+                alert('檔案太大，最大限制為 50MB');
+                fileInput.value = ''; // 清空選擇
+                return;
+            }
+        }
+
+        fetch("{{ route('messages.store') }}", {
+            method: 'POST',
+            body: new FormData(e.target),
+            headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }
+        })
+        .then(r => r.json())
+        .then(d => { if(d.success) { loadMessages(); e.target.reset(); } });
     };
 
     window.submitReply = function(e, parentId) {
@@ -160,6 +179,19 @@
         fetch("{{ route('messages.store') }}", { method: 'POST', body: new FormData(e.target), headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content } })
         .then(r => r.json()).then(() => loadMessages());
     };
+
+    // 加在 loadMessages() 前面
+    document.addEventListener('change', function(e) {
+        if (e.target.type === 'file') {
+            const file = e.target.files[0];
+            if (!file) return;
+            const maxSize = 50 * 1024 * 1024;
+            if (file.size > maxSize) {
+                alert('檔案太大，最大限制為 50MB');
+                e.target.value = '';
+            }
+        }
+    });
     
     function loadMessages() { fetch('/api/messages').then(r => r.json()).then(renderMessages); }
     loadMessages();

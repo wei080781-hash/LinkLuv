@@ -37,6 +37,11 @@ class User extends Authenticatable
         'profile_photo_url',
     ];
 
+    public function likes()
+    {
+        return $this->hasMany(Like::class);
+    }
+
     /**
      * 新增取得頭像路徑的 Attribute
      */
