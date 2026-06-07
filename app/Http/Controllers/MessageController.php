@@ -17,10 +17,10 @@ class MessageController extends Controller
     public function index()
     {
         // 1. 從 Redis 讀取全域訊息快取 (若無則查詢 DB 並存入 1 小時)
-        $messages = Cache::remember('global_messages_feed', 3600, function () {
-             return Message::with(['user'])
+        $messages = Cache::remember('global_messages_feed', 60, function () {
+             return Message::with(['user', 'parent.user'])   // ← 新增 parent.user
                  ->withCount('likes')
-                 ->orderBy('path', 'ASC')
+                 ->orderBy('path', 'ASC') // 物化路徑排序，確保父在子前
                  ->get();
          });
 
@@ -33,6 +33,10 @@ class MessageController extends Controller
         // 3. 在記憶體中動態合併個人化狀態
         return $messages->map(function ($msg) use ($likedIds) {
             $msg->is_liked = isset($likedIds[$msg->id]);
+
+            // ★ 附加 parent_user_name，供前端 @mention 使用
+            $msg->parent_user_name = $msg->parent?->user?->name ?? null;
+
             return $msg;
         });    
     }
@@ -42,13 +46,18 @@ class MessageController extends Controller
     {
         \Log::info('Files', $request->allFiles());
         \Log::info('Input', $request->except(['+']));
+
         $validated = $request->validate([
-            'content' => 'required|string|max:1000',
+            'content'   => 'nullable|string|max:1000',   // ★ 改為 nullable，允許純圖/純影片留言
             'parent_id' => 'nullable|exists:messages,id',
             'media' => 'nullable|file|mimes:jpg,jpeg,png,gif,mp4,mov,ogg|max:51200',
         ]);
 
-
+        // ★ 內容與媒體至少要有一個
+        if (empty($validated['content']) && !$request->hasFile('media')) {
+        return response()->json(['success' => false, 'message' => '請輸入內容或上傳媒體'], 422);
+        }
+        
 
         $parentId = $request->input('parent_id');
         // 判斷圖片還是影片，並儲存路徑
@@ -75,6 +84,7 @@ class MessageController extends Controller
         
         // 1.初始化深度與路徑
         $depth = 0;
+        $threadId = null;
 
         if ($parentId) {
             $parent = Message::findOrFail($parentId);
@@ -87,7 +97,7 @@ class MessageController extends Controller
         // 先建立留言
         $message = Message::create([
             'user_id'   => auth()->id(),
-            'content'   => $request->content,
+            'content'    => $request->content ?? '',
             'parent_id' => $parentId,
             'image_path' => ($mediaType === 'image') ? $mediaPath : null,
             'video_path' => ($mediaType === 'video') ? $mediaPath : null,
