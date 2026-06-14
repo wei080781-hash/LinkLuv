@@ -1,82 +1,21 @@
-<<<<<<< HEAD
-@import 'tailwindcss';
-
-@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
-@source '../../storage/framework/views/*.php';
-@source '../**/*.blade.php';
-@source '../**/*.js';
-
-@theme {
-    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
-        'Segoe UI Symbol', 'Noto Color Emoji';
-}
-=======
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
 @layer components {
-    /* 命名空間根容器：使用相對定位作為所有線條的起點 */
-    .linkluv-comments { position: relative; }
-
-    /* ── 骨架 (Vertical Spine) ── */
-    /* .replies-inner : 回覆內容的容器 */
-    /* margin-left: 20px : 設定左外邊距，決定樹狀階層的縮排深度 */
-    /* padding-left: 22px : 設定左內邊距，為垂直線留出空間 */
-    /* border-left: 2px solid #d1d5db : 在容器左側畫出一條 2 像素寬的實線，這是主要的垂直樹幹 */
-    .linkluv-comments .replies-inner {
-        position: relative;
-        margin-left: 20px;
-        padding-left: 22px;
-        border-left: 2px solid #d1d5db;
+    /* 這裡定義連線的「形狀」 */
+    .has-connector {
+        @apply relative;
+    }
+    
+    /* 垂直線 */
+    .has-connector::before {
+        content: '';
+        @apply absolute -left-6 top-0 bottom-1/2 w-0.5 bg-gray-300;
     }
 
-    /* ── 樹枝 (L-Branch) ── */
-    /* .reply-item : 每一則留言項目 */
-    /* position: relative : 設定相對定位，讓內部 ::before 線條能準確定位 */
-    .linkluv-comments .reply-item {
-        position: relative;
-        padding-left: 0px;
-    }
-
-    /* .reply-item img : 留言者頭像 */
-    /* z-index: 2 : 將頭像圖層設為 2，確保頭像能蓋在線條上方，不被線條穿過 */
-    .linkluv-comments .reply-item img {
-        position: relative;
-        z-index: 2;
-    }
-
-    /* ── 連接橫線 ── */
-    /* .reply-item::before : 每一則留言前的橫向連接線 */
-    /* content: "" : 偽元素必須，宣告線條存在 */
-    /* position: absolute : 絕對定位，不佔用排版空間 */
-    /* left: -22px : 將線條向左移動 22 像素，使其左端對齊垂直樹幹 */
-    /* top: 22px : 設定距離容器頂部 22 像素，對齊頭像中心 */
-    /* width: 22px : 設定橫線長度為 22 像素 */
-    /* border-bottom: 2px solid #d1d5db : 僅畫下邊框，形成橫向連結 */
-    .linkluv-comments .reply-item::before {
-        content: "";
-        position: absolute;
-        left: -22px;
-        top: 22px;
-        width: 22px;
-        border-bottom: 2px solid #d1d5db;
-    }
-
-    /* ── 結尾處理 ── */
-    /* .reply-item:last-child::before : 當該層級為最後一則留言時 */
-    /* border-left: 2px solid #d1d5db : 在線條左側加上邊框 */
-    /* height: 20px : 設定高度，形成一個 L 型轉角的結尾 */
-    /* border-bottom-left-radius: 12px : 將轉角設為 12 像素圓角 */
-    .linkluv-comments .reply-item:last-child::before {
-        height: 20px;
-        border-left: 2px solid #d1d5db;
-        border-bottom-left-radius: 12px;
-    }
-
-    /* 徹底移除導致衝突的 ::after 偽元素，防止殘線產生 */
-    .linkluv-comments .reply-item::after {
-        display: none;
+    /* 水平線 */
+    .has-connector::after {
+        content: '';
+        @apply absolute -left-6 top-1/2 w-6 h-0.5 bg-gray-300;
     }
 }
->>>>>>> feature/upload-function
