@@ -3,198 +3,447 @@
         <div class="max-w-4xl mx-auto px-6">
             <h2 class="font-semibold text-2xl text-gray-800 leading-tight mb-8">生活牆</h2>
             @include('components.message-form')
-            <div id="messages-list" class="space-y-4"></div>
+            <div id="messages-list" class="flex flex-col gap-4"></div>
         </div>
     </div>
 
+    {{-- Lightbox --}}
+    <div id="lightbox" class="hidden fixed inset-0 bg-black/85 z-50 items-center justify-center">
+        <button onclick="closeLightbox()"
+            class="absolute top-4 right-5 text-white text-4xl leading-none bg-transparent border-none cursor-pointer">✕</button>
+        <div id="lightbox-content"></div>
+    </div>
+
+    <style>
+    /* 新增：回覆分支線樣式 */
+    .reply-branch {
+        position: relative;
+    }
+
+    .reply-branch::before {
+        content: '';
+        position: absolute;
+        left: -16px;
+        /* 連接父容器的垂直線 */
+        top: 22px;
+        /* 對準頭像垂直中心 */
+        width: 16px;
+        /* 線條長度 */
+        height: 2px;
+        /* 線條粗細 */
+        background-color: #e5e7eb;
+        /* border-gray-200 的顏色 */
+    }
+
+    #lightbox.active {
+        display: flex;
+    }
+
+    #lightbox img,
+    #lightbox video {
+        max-width: 90vw;
+        max-height: 90vh;
+        border-radius: 8px;
+        box-shadow: 0 0 40px rgba(0, 0, 0, 0.5);
+    }
+
+    .replies-wrapper {
+        overflow: hidden;
+        max-height: 0;
+        opacity: 0;
+        transition: max-height 0.35s ease, opacity 0.25s ease;
+    }
+
+    .replies-wrapper.expanded {
+        max-height: 99999px;
+        opacity: 1;
+    }
+
+    .toggle-arrow {
+        display: inline-block;
+        transition: transform 0.2s ease;
+        font-size: 0.65rem;
+    }
+
+    .toggle-open .toggle-arrow {
+        transform: rotate(180deg);
+    }
+
+    .msg-highlight .msg-bubble {
+        background: #dbeafe !important;
+        border-color: #93c5fd !important;
+    }
+
+    .msg-bubble {
+        transition: background 0.15s;
+    }
+
+    .reply-form-wrap {
+        display: none;
+    }
+
+    .reply-form-wrap.show {
+        display: flex;
+    }
+
+    .msg-media img,
+    .msg-media video {
+        max-width: 240px;
+        max-height: 240px;
+        border-radius: 10px;
+        border: 1px solid #e5e7eb;
+        margin-top: 6px;
+        display: block;
+        cursor: pointer;
+    }
+    </style>
+
     <script>
-    // ──────────────────────────────────────────────────
-    // 1. 主渲染函式：將數據分組後呼叫 buildThread
-    // ──────────────────────────────────────────────────
+    /* ... (資料處理邏輯保持不變) ... */
+    const expandedSet = new Set();
+    let globalMsgMap = new Map();
+
     function renderMessages(messages) {
         const list = document.getElementById('messages-list');
         list.innerHTML = '';
-        
-        const map = new Map();
-        messages.forEach(msg => map.set(msg.id, { ...msg, children: [] }));
+        globalMsgMap = new Map();
+        messages.forEach(m => globalMsgMap.set(m.id, {
+            ...m,
+            children: []
+        }));
         const roots = [];
-        map.forEach(msg => {
-            if (!msg.parent_id) {
-                roots.push(msg);
-            } else {
-                const parent = map.get(msg.parent_id);
-                if (parent) parent.children.push(msg);
+        messages.forEach(m => {
+            if (!m.parent_id) roots.push(globalMsgMap.get(m.id));
+            else {
+                const parent = globalMsgMap.get(m.parent_id);
+                if (parent) parent.children.push(globalMsgMap.get(m.id));
+                else roots.push(globalMsgMap.get(m.id));
             }
         });
-
-        roots.forEach(root => {
-            list.insertAdjacentHTML('beforeend', buildNodeHTML(root, 0));
-        });
+        roots.forEach(root => list.insertAdjacentHTML('beforeend', buildRootHTML(root)));
     }
 
-    // ──────────────────────────────────────────────────
-    // 2. 遞迴渲染函式
-    // ──────────────────────────────────────────────────
-    function buildNodeHTML(msg, depth) {
-        const avatarSize = depth === 0 ? 40 : 32;
-        const paddingLeft = avatarSize + 12;
-        // const imageHtml = msg.image_path
-        //     ? `<div class="mt-2"><img src="/storage/${msg.image_path}" class="max-w-xs rounded-xl shadow-sm border border-gray-100"></div>`
-        //     : '';
-        let mediaHtml = '';
-        if (msg.media_type === 'image' && msg.image_path) {
-            mediaHtml = `<div class="mt-2"><img src="/storage/${msg.image_path}" class="max-w-xs rounded-xl shadow-sm border border-gray-100"></div>`;
-        } else if (msg.media_type === 'video' && msg.video_path) {
-            mediaHtml = `
-                <div class="mt-2">
-                   <video controls class="max-w-xs rounded-xl shadow-sm border border-gray-100">
-                          <source src="/storage/${msg.video_path}" type="video/mp4">
-                            您的瀏覽器不支援影片播放。
-                   </video>
-                </div>
-            `;
-        }
+    function buildRootHTML(msg) {
+        const hasReplies = msg.children && msg.children.length > 0;
+        const isOpen = expandedSet.has(msg.id);
+        const count = msg.children ? msg.children.length : 0;
 
-        // 修正縮排邏輯：只有 depth 為 0 的容器才需要考慮容器縮排，所有回覆 (depth >= 1) 一律強制平齊
-        const childrenHTML = msg.children.length > 0
-        ? (() => {
-        const lastAvatarSize = depth === 0 ? 32 : 32;
-        const vLine = depth === 0
-            ? `<div style="position:absolute; left:0; top:0; bottom:${lastAvatarSize / 2}px; width:2px; background:#d1d5db;"></div>`
-            : '';
-            return `<div style="position:relative; margin-left:${depth < 2 ? '40px' : '0'}; margin-top:4px;">
-                    ${vLine}
-                    ${msg.children.map(child => buildNodeHTML(child, depth + 1)).join('')}
-                </div>`;
-            })()
-        : '';
+        const avatarCol = hasReplies ?
+            `<div class="flex flex-col items-center flex-shrink-0 w-10">
+                   <img src="${msg.user.profile_photo_url}" class="w-10 h-10 rounded-full object-cover flex-shrink-0">
+                   <div class="w-0.5 flex-1 bg-gray-300 mt-1 rounded-full min-h-3"></div>
+               </div>` :
+            `<img src="${msg.user.profile_photo_url}" class="w-10 h-10 rounded-full object-cover flex-shrink-0">`;
 
-        // 橫線：固定在 depth > 0 顯示，確保樣式一致
-        const connector = depth > 0
-        ? `<div style="position:absolute; left:-40px; top:${avatarSize / 2}px; width:40px; height:2px; background:#d1d5db;"></div>`
-        : '';
+        const toggleBtn = hasReplies ?
+            `<button onclick="toggleReplies(${msg.id}, ${count})" id="tbtn-${msg.id}" class="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700 mt-1 select-none bg-transparent border-none cursor-pointer p-0"><span class="toggle-arrow ${isOpen ? 'rotate-180' : ''}">▼</span><span id="tlabel-${msg.id}">${isOpen ? '隱藏回覆' : `查看 ${count} 則回覆`}</span></button>` :
+            '';
+
+        const repliesHtml = hasReplies ? msg.children.map(c => buildReplyHTML(c, msg.id, new Set())).join('') : '';
 
         return `
-        <div id="message-${msg.id}" class="mb-3" style="position:relative;">
-            <div style="display:flex; align-items:flex-start; position:relative;">
-                ${connector}
-                <img src="${msg.user.profile_photo_url}"
-                     style="width:${avatarSize}px; height:${avatarSize}px; border-radius:50%; flex-shrink:0; margin-right:8px; background:white; z-index:1;">
-                <div class="p-2 bg-gray-100 rounded-2xl shadow-sm" style="flex:1;">
-                    <p class="text-xs font-semibold text-gray-700">${msg.user.name}</p>
-                    <p class="text-sm text-gray-800">${msg.content}</p>
-                    ${mediaHtml}
+        <div id="msg-${msg.id}" class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4" data-id="${msg.id}">
+            <div class="flex items-start gap-2.5">
+                ${avatarCol}
+                <div class="flex-1 min-w-0">
+                    <div class="msg-bubble bg-gray-100 hover:bg-gray-200 rounded-2xl px-3 py-2">
+                        <div class="flex items-baseline gap-1 flex-wrap mb-0.5">
+                            <span class="text-sm font-bold text-gray-700">${escHtml(msg.user.name)}</span>
+                            <span class="text-xs text-gray-400 ml-auto">${buildTimeLabel(msg.created_at)}</span>
+                        </div>
+                        <p class="text-sm text-gray-800 m-0 whitespace-pre-wrap" id="content-${msg.id}">${escHtml(msg.content)}</p>
+                        ${buildMediaHtml(msg)}
+                    </div>
+                    <div class="flex gap-3 text-xs text-gray-400 mt-1">
+                        <button onclick="toggleReply(${msg.id}, ${msg.id})" class="hover:text-blue-600 bg-transparent border-none cursor-pointer p-0 text-xs text-gray-400">回覆</button>
+                        <button onclick="deleteMsg(${msg.id})" class="hover:text-red-500 bg-transparent border-none cursor-pointer p-0 text-xs text-red-300">刪除</button>
+                        <button onclick="editMsg(${msg.id})" class="hover:text-blue-600 bg-transparent border-none cursor-pointer p-0 text-xs text-gray-400">編輯</button>
+                        <button onclick="toggleLike(${msg.id})" class="like-btn flex items-center gap-1 bg-transparent border-none cursor-pointer p-0 text-xs ${msg.is_liked ? 'text-pink-500 font-bold' : 'text-gray-400'}">❤️ <span id="lcount-${msg.id}">${msg.likes_count || 0}</span></button>
+                    </div>
+                    ${buildReplyForm(msg.id, msg.id)}
+                    ${toggleBtn}
                 </div>
             </div>
-            <div class="mt-1 flex gap-3 text-xs text-gray-400" style="padding-left:${paddingLeft}px;">
-                <button onclick="toggleReply(${msg.id})" class="hover:text-blue-600">回覆</button>
-                <button onclick="deleteMessage(${msg.id})" class="hover:text-red-500">刪除</button>
-                <button onclick="editMessage(${msg.id})" class="hover:text-blue-600">編輯</button>
-                <button onclick="toggleLike(${msg.id})" class="flex items-center gap-1 ${msg.is_liked ? 'text-pink-500' : ''}">
-                    ❤️ ${msg.likes_count || 0}
-                </button>
+            <div id="rwrap-${msg.id}" class="replies-wrapper ${isOpen ? 'expanded' : ''}">
+                <div class="ml-5 pl-4 border-l-2 border-gray-200 mt-2">
+                    ${repliesHtml}
+                </div>
             </div>
-            <div id="reply-form-${msg.id}" class="hidden mt-2" style="padding-left:${paddingLeft}px;">
-                <form onsubmit="submitReply(event, ${msg.id})" class="flex gap-2">
-                    <input type="hidden" name="parent_id" value="${msg.id}">
-                    <input type="text" name="content" required placeholder="回覆..."
-                           class="rounded-full text-sm px-4 py-1.5 border w-full">
-                    <button type="submit" class="text-pink-600 text-sm font-bold px-3">送出</button>
-                </form>
-            </div>
-            ${childrenHTML}
-        </div>
-        `;
+        </div>`;
     }
 
-    // ──────────────────────────────────────────────────
-    // 3. 原有功能邏輯 (掛載到 window 以確保 onclick 可見)
-    // ──────────────────────────────────────────────────
-    window.toggleReply = function(id) {
-        const el = document.getElementById(`reply-form-${id}`);
-        if (el) {
-            el.classList.toggle('hidden');
+    function buildReplyHTML(msg, rootId, visited) {
+        if (visited.has(msg.id)) return '';
+        visited.add(msg.id);
+        const hasChildren = msg.children && msg.children.length > 0;
+        const childrenHtml = hasChildren ? msg.children.map(c => buildReplyHTML(c, rootId, new Set(visited))).join('') :
+            '';
+        const branchBtn = hasChildren ?
+            `<button class="hover:text-gray-600 bg-transparent border-none cursor-pointer p-0 text-xs text-gray-400" id="bbtn-${msg.id}" onclick="toggleBranch(${msg.id}, this)">▾ 收合</button>` :
+            '';
+        const replyingTo = buildReplyingToTag(msg.parent_id, rootId);
+        const timeLabel = buildTimeLabel(msg.created_at);
+        const childrenSection = hasChildren ?
+            `<div id="branch-${msg.id}" class="ml-6 pl-4 border-l-2 border-gray-200 mt-1">${childrenHtml}</div>` : '';
+
+        // 加入 reply-branch class 以觸發 CSS 偽元素
+        return `
+        <div id="msg-${msg.id}" class="reply-branch relative pt-2.5" data-id="${msg.id}" data-parent-id="${msg.parent_id || ''}">
+            <div class="flex items-start gap-2">
+                <img src="${msg.user.profile_photo_url}" class="w-7 h-7 rounded-full object-cover flex-shrink-0 mt-0.5 relative z-10">
+                <div class="flex-1 min-w-0">
+                    <div class="msg-bubble bg-gray-50 hover:bg-gray-100 border border-gray-100 rounded-2xl px-3 py-2">
+                        <div class="flex items-baseline gap-1 flex-wrap mb-0.5">
+                            <span class="text-xs font-bold text-gray-700">${escHtml(msg.user.name)}</span>
+                            ${replyingTo}
+                            <span class="text-xs text-gray-400 ml-auto">${timeLabel}</span>
+                        </div>
+                        <p class="text-sm text-gray-800 m-0 whitespace-pre-wrap" id="content-${msg.id}">${escHtml(msg.content)}</p>
+                        ${buildMediaHtml(msg)}
+                    </div>
+                    <div class="flex gap-3 text-xs text-gray-400 mt-1">
+                        <button onclick="toggleReply(${msg.id}, ${rootId})" class="hover:text-blue-600 bg-transparent border-none cursor-pointer p-0 text-xs text-gray-400">回覆</button>
+                        ${branchBtn}
+                        <button onclick="deleteMsg(${msg.id})" class="hover:text-red-500 bg-transparent border-none cursor-pointer p-0 text-xs text-red-300">刪除</button>
+                        <button onclick="editMsg(${msg.id})" class="hover:text-blue-600 bg-transparent border-none cursor-pointer p-0 text-xs text-gray-400">編輯</button>
+                        <button onclick="toggleLike(${msg.id})" class="like-btn flex items-center gap-1 bg-transparent border-none cursor-pointer p-0 text-xs ${msg.is_liked ? 'text-pink-500 font-bold' : 'text-gray-400'}">❤️ <span id="lcount-${msg.id}">${msg.likes_count || 0}</span></button>
+                    </div>
+                    ${buildReplyForm(msg.id, rootId)}
+                </div>
+            </div>
+            ${childrenSection}
+        </div>`;
+    }
+
+    /* ... (其餘函式維持不變) ... */
+    function buildReplyForm(msgId, rootId) {
+        return `<div id="rform-${msgId}" class="reply-form-wrap items-center gap-2 mt-1.5 flex-wrap"><form onsubmit="submitReply(event, ${rootId})" class="flex gap-2 w-full items-center"><input type="hidden" name="parent_id" value="${msgId}"><input type="text" name="content" placeholder="回覆..." class="flex-1 min-w-24 rounded-full text-sm px-4 py-1.5 border border-gray-300 outline-none focus:border-blue-400 transition-colors"><label class="text-gray-400 text-base cursor-pointer flex-shrink-0" title="上傳圖片或影片">📎<input type="file" name="media" accept="image/*,video/mp4,video/mov,video/ogg" class="hidden" onchange="previewMedia(this,'fprev-${msgId}')"></label><button type="submit" class="text-blue-600 text-sm font-bold bg-transparent border-none cursor-pointer whitespace-nowrap">送出</button></form><div id="fprev-${msgId}" class="msg-media"></div></div>`;
+    }
+
+    function buildReplyingToTag(parentId, rootId) {
+        if (!parentId || parentId === rootId) return '';
+        const parent = globalMsgMap.get(parentId);
+        if (!parent) return '';
+        return `<span class="text-xs text-gray-400">回覆</span> <span class="text-xs font-semibold text-blue-500 cursor-pointer hover:underline" onclick="scrollToMsg(${parentId})">@${escHtml(parent.user.name)}</span>`;
+    }
+
+    function buildTimeLabel(createdAt) {
+        if (!createdAt) return '';
+        const d = new Date(createdAt);
+        const diff = Math.floor((Date.now() - d) / 1000);
+        if (diff < 60) return '剛剛';
+        if (diff < 3600) return Math.floor(diff / 60) + ' 分鐘前';
+        if (diff < 86400) return Math.floor(diff / 3600) + ' 小時前';
+        if (diff < 604800) return Math.floor(diff / 86400) + ' 天前';
+        return `${d.getMonth()+1}/${d.getDate()}`;
+    }
+
+    function buildMediaHtml(msg) {
+        if (msg.media_type === 'image' && msg.image_path)
+        return `<div class="msg-media"><img src="/storage/${msg.image_path}" onclick="openLightbox('image','/storage/${msg.image_path}')"></div>`;
+        if (msg.media_type === 'video' && msg.video_path)
+        return `<div class="msg-media"><video controls preload="metadata"><source src="/storage/${msg.video_path}" type="video/mp4">您的瀏覽器不支援影片播放。</video></div>`;
+        return '';
+    }
+
+    function escHtml(str) {
+        if (!str) return '';
+        return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+    window.toggleReplies = function(rootId, count) {
+        const wrap = document.getElementById(`rwrap-${rootId}`);
+        const btn = document.getElementById(`tbtn-${rootId}`);
+        const label = document.getElementById(`tlabel-${rootId}`);
+        const arrow = btn ? btn.querySelector('.toggle-arrow') : null;
+        if (!wrap) return;
+        const isOpen = wrap.classList.contains('expanded');
+        if (isOpen) {
+            wrap.classList.remove('expanded');
+            if (label) label.textContent = `查看 ${count} 則回覆`;
+            if (arrow) arrow.classList.remove('rotate-180');
+            expandedSet.delete(rootId);
         } else {
-            console.error('找不到表單: reply-form-' + id);
+            wrap.classList.add('expanded');
+            if (label) label.textContent = '隱藏回覆';
+            if (arrow) arrow.classList.add('rotate-180');
+            expandedSet.add(rootId);
         }
     };
-
-    window.deleteMessage = function(messageId) {
-        if (!confirm('確定要刪除這則訊息嗎？')) return;
-        fetch(`/messages/${messageId}`, {
-            method: 'DELETE',
-            headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }
-        }).then(r => r.json()).then(data => { if(data.success) loadMessages(); });
+    window.toggleBranch = function(msgId, btn) {
+        const branch = document.getElementById(`branch-${msgId}`);
+        if (!branch) return;
+        const isHidden = branch.classList.contains('hidden');
+        if (isHidden) {
+            branch.classList.remove('hidden');
+            btn.textContent = '▾ 收合';
+        } else {
+            branch.classList.add('hidden');
+            btn.textContent = '▸ 展開';
+        }
     };
-
-    window.editMessage = function(messageId) {
-        const p = document.querySelector(`#message-${messageId} p:nth-child(2)`);
-        if (!p) return;
-        const content = p.innerText;
-        p.innerHTML = `<textarea id="edit-${messageId}" class="w-full text-sm border rounded-lg p-2">${content}</textarea>
-                       <button onclick="saveEdit(${messageId})" class="text-xs bg-blue-500 text-white px-2 py-1 rounded">儲存</button>`;
-    };
-
-    window.saveEdit = function(messageId) {
-        const newContent = document.getElementById(`edit-${messageId}`).value;
-        fetch(`/messages/${messageId}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
-            body: JSON.stringify({ content: newContent })
-        }).then(r => r.json()).then(data => { if(data.success) loadMessages(); });
-    };
-
-    window.toggleLike = function(messageId) {
-        fetch(`/messages/${messageId}/like`, { method: 'POST', headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content } })
-        .then(() => loadMessages());
-    };
-
-    window.submitPost = function(e) {
-    e.preventDefault();
-
-        // 檢查檔案大小
-        const fileInput = e.target.querySelector('input[type="file"]');
-        if (fileInput && fileInput.files.length > 0) {
-            const file = fileInput.files[0];
-            const maxSize = 50 * 1024 * 1024; // 50MB
-
-            if (file.size > maxSize) {
-                alert('檔案太大，最大限制為 50MB');
-                fileInput.value = ''; // 清空選擇
-                return;
+    window.toggleReply = function(msgId, rootId) {
+        if (rootId !== msgId) {
+            const wrap = document.getElementById(`rwrap-${rootId}`);
+            const label = document.getElementById(`tlabel-${rootId}`);
+            const btn = document.getElementById(`tbtn-${rootId}`);
+            const arrow = btn ? btn.querySelector('.toggle-arrow') : null;
+            if (wrap && !wrap.classList.contains('expanded')) {
+                wrap.classList.add('expanded');
+                if (label) label.textContent = '隱藏回覆';
+                if (arrow) arrow.classList.add('rotate-180');
+                expandedSet.add(rootId);
             }
         }
-
+        const form = document.getElementById(`rform-${msgId}`);
+        if (!form) return;
+        const isShown = form.classList.contains('show');
+        if (isShown) {
+            form.classList.remove('show');
+        } else {
+            form.classList.add('show');
+            const input = form.querySelector('input[name="content"]');
+            if (input) input.focus();
+            highlightMsg(msgId);
+        }
+    };
+    window.submitReply = function(e, rootId) {
+        e.preventDefault();
+        const form = e.target;
+        const contentInput = form.querySelector('input[name="content"]');
+        const fileInput = form.querySelector('input[type="file"]');
+        if (!contentInput.value.trim() && (!fileInput || !fileInput.files.length)) {
+            alert('請輸入回覆內容或上傳媒體');
+            return;
+        }
+        fetch("{{ route('messages.store') }}", {
+            method: 'POST',
+            body: new FormData(form),
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+            }
+        }).then(r => r.json()).then(() => {
+            expandedSet.add(rootId);
+            loadMessages();
+        });
+    };
+    window.submitPost = function(e) {
+        e.preventDefault();
+        const fi = e.target.querySelector('input[type="file"]');
+        if (fi?.files.length > 0 && fi.files[0].size > 50 * 1024 * 1024) {
+            alert('檔案太大，最大限制為 50MB');
+            fi.value = '';
+            return;
+        }
         fetch("{{ route('messages.store') }}", {
             method: 'POST',
             body: new FormData(e.target),
-            headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }
-        })
-        .then(r => r.json())
-        .then(d => { if(d.success) { loadMessages(); e.target.reset(); } });
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+            }
+        }).then(r => r.json()).then(d => {
+            if (d.success) {
+                loadMessages();
+                e.target.reset();
+            }
+        });
     };
-
-    window.submitReply = function(e, parentId) {
-        e.preventDefault();
-        fetch("{{ route('messages.store') }}", { method: 'POST', body: new FormData(e.target), headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content } })
-        .then(r => r.json()).then(() => loadMessages());
+    window.deleteMsg = function(id) {
+        if (!confirm('確定要刪除這則訊息嗎？')) return;
+        fetch(`/messages/${id}`, {
+            method: 'DELETE',
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+            }
+        }).then(r => r.json()).then(d => {
+            if (d.success) loadMessages();
+        });
     };
+    window.editMsg = function(id) {
+        const p = document.getElementById(`content-${id}`);
+        if (!p) return;
+        const orig = p.innerText;
+        p.innerHTML =
+            `<textarea id="edit-ta-${id}" rows="2" class="w-full text-sm border border-gray-300 rounded-lg p-2 resize-none">${orig}</textarea><div class="flex gap-2 mt-1"><button onclick="saveEdit(${id})" class="text-xs bg-blue-500 text-white px-3 py-1 rounded-lg border-none cursor-pointer">儲存</button><button onclick="loadMessages()" class="text-xs bg-gray-200 text-gray-700 px-3 py-1 rounded-lg border-none cursor-pointer">取消</button></div>`;
+    };
+    window.saveEdit = function(id) {
+        const val = document.getElementById(`edit-ta-${id}`)?.value;
+        if (!val) return;
+        fetch(`/messages/${id}`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+            },
+            body: JSON.stringify({
+                content: val
+            }),
+        }).then(r => r.json()).then(d => {
+            if (d.success) loadMessages();
+        });
+    };
+    window.toggleLike = function(id) {
+        fetch(`/messages/${id}/like`, {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+            },
+        }).then(() => loadMessages());
+    };
+    window.previewMedia = function(input, previewId) {
+        const file = input.files[0];
+        if (!file) return;
+        if (file.size > 50 * 1024 * 1024) {
+            alert('檔案太大，最大限制為 50MB');
+            input.value = '';
+            return;
+        }
+        const url = URL.createObjectURL(file);
+        const el = document.getElementById(previewId);
+        if (!el) return;
+        el.innerHTML = file.type.startsWith('image/') ? `<img src="${url}" class="max-w-40 rounded-xl mt-1">` :
+            `<video src="${url}" controls class="max-w-48 rounded-xl mt-1"></video>`;
+    };
+    window.openLightbox = function(type, src) {
+        document.getElementById('lightbox-content').innerHTML = type === 'image' ? `<img src="${src}">` :
+            `<video src="${src}" controls autoplay></video>`;
+        document.getElementById('lightbox').classList.add('active');
+    };
+    window.closeLightbox = function() {
+        document.getElementById('lightbox').classList.remove('active');
+        document.getElementById('lightbox-content').innerHTML = '';
+    };
+    document.getElementById('lightbox').addEventListener('click', function(e) {
+        if (e.target === this) closeLightbox();
+    });
 
-    // 加在 loadMessages() 前面
+    function highlightMsg(msgId) {
+        document.querySelectorAll('.msg-highlight').forEach(el => el.classList.remove('msg-highlight'));
+        const el = document.getElementById(`msg-${msgId}`);
+        if (el) el.classList.add('msg-highlight');
+    }
+    window.scrollToMsg = function(msgId) {
+        const el = document.getElementById(`msg-${msgId}`);
+        if (!el) return;
+        el.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center'
+        });
+        el.classList.add('msg-highlight');
+        setTimeout(() => el.classList.remove('msg-highlight'), 1500);
+    };
     document.addEventListener('change', function(e) {
         if (e.target.type === 'file') {
             const file = e.target.files[0];
-            if (!file) return;
-            const maxSize = 50 * 1024 * 1024;
-            if (file.size > maxSize) {
+            if (file && file.size > 50 * 1024 * 1024) {
                 alert('檔案太大，最大限制為 50MB');
                 e.target.value = '';
             }
         }
     });
-    
-    function loadMessages() { fetch('/api/messages').then(r => r.json()).then(renderMessages); }
-    loadMessages();
 
+    function loadMessages() {
+        fetch('/api/messages').then(r => r.json()).then(renderMessages);
+    }
+    loadMessages();
     </script>
 </x-app-layout>

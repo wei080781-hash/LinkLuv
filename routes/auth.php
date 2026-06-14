@@ -33,10 +33,12 @@ Route::middleware('guest')->group(function () {
 
     Route::post('reset-password', [NewPasswordController::class, 'store'])
         ->name('password.store');
-    // Google OAuth 路由
+    
+});
+
+// Google OAuth 路由
     Route::get('/auth/google', [GoogleController::class, 'redirectToGoogle'])->name('google.login');
     Route::get('/auth/google/callback', [GoogleController::class, 'handleGoogleCallback']);
-});
 
 Route::middleware('auth')->group(function () {
     Route::get('verify-email', EmailVerificationPromptController::class)
