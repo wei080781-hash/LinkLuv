@@ -30,8 +30,6 @@ Route::middleware('auth')->group(function () {
     Route::patch('/messages/{message}',
     [MessageController::class, 'update'])->name('messages.update');
     Route::post('/messages/{message}/like', [MessageController::class, 'like'])->name('messages.like');
-    Route::delete('/profile/photo', [ProfileController::class,
-     'deletePhoto'])->name('profile.photo.delete');
 });
 // 點擊使用者名稱後的個人頁面路由
 Route::get('/profile/{id}', function ($id) {
@@ -39,3 +37,7 @@ Route::get('/profile/{id}', function ($id) {
 })->name('profile.show');
 
 require __DIR__.'/auth.php';
+
+// 路由設定 (routes/web.php)
+Route::post('/messages/{message}/like',
+[MessageController::class, 'like'])->name('messages.like');

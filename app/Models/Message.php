@@ -11,7 +11,7 @@ class Message extends Model
 {
     use HasFactory, SoftDeletes;
 
-    protected $fillable = ['content', 'user_id', 'parent_id', 'thread_id', 'depth','path', 'image_path', 'video_path', 'media_type'];
+    protected $fillable = ['content', 'user_id', 'parent_id', 'thread_id', 'depth','path', 'image_path'];
 
     public function parent()
     {
