@@ -39,7 +39,3 @@ Route::get('/profile/{id}', function ($id) {
 })->name('profile.show');
 
 require __DIR__.'/auth.php';
-
-// 路由設定 (routes/web.php)
-Route::post('/messages/{message}/like',
-[MessageController::class, 'like'])->name('messages.like');
