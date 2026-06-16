@@ -69,9 +69,11 @@
         transform: rotate(180deg);
     }
 
-    .msg-highlight .msg-bubble {
+    .msg-bubble.msg-highlight {
         background: #dbeafe !important;
         border-color: #93c5fd !important;
+        border: 2px solid #93c5fd;
+        border-radius: 1rem;
     }
 
     .msg-bubble {
@@ -139,7 +141,9 @@
             `<button onclick="toggleReplies(${msg.id}, ${count})" id="tbtn-${msg.id}" class="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700 mt-1 select-none bg-transparent border-none cursor-pointer p-0"><span class="toggle-arrow ${isOpen ? 'rotate-180' : ''}">▼</span><span id="tlabel-${msg.id}">${isOpen ? '隱藏回覆' : `查看 ${count} 則回覆`}</span></button>` :
             '';
 
-        const repliesHtml = hasReplies ? msg.children.map(c => buildReplyHTML(c, msg.id, new Set())).join('') : '';
+        const repliesHtml = hasReplies 
+        ? msg.children.map(c => buildReplyHTML(c, msg.id, new Set(), 1)).join('') 
+        : '';
 
         return `
         <div id="msg-${msg.id}" class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4" data-id="${msg.id}">
@@ -172,19 +176,24 @@
         </div>`;
     }
 
-    function buildReplyHTML(msg, rootId, visited) {
+    function buildReplyHTML(msg, rootId, visited, depth = 1) {
         if (visited.has(msg.id)) return '';
         visited.add(msg.id);
         const hasChildren = msg.children && msg.children.length > 0;
-        const childrenHtml = hasChildren ? msg.children.map(c => buildReplyHTML(c, rootId, new Set(visited))).join('') :
-            '';
+
+        const childrenHtml = hasChildren 
+        ? msg.children.map(c => buildReplyHTML(c, rootId, new Set(visited), depth + 1)).join('') 
+        : '';
         const branchBtn = hasChildren ?
             `<button class="hover:text-gray-600 bg-transparent border-none cursor-pointer p-0 text-xs text-gray-400" id="bbtn-${msg.id}" onclick="toggleBranch(${msg.id}, this)">▾ 收合</button>` :
             '';
         const replyingTo = buildReplyingToTag(msg.parent_id, rootId);
         const timeLabel = buildTimeLabel(msg.created_at);
-        const childrenSection = hasChildren ?
-            `<div id="branch-${msg.id}" class="ml-6 pl-4 border-l-2 border-gray-200 mt-1">${childrenHtml}</div>` : '';
+        const childrenSection = hasChildren
+        ? (depth < 3
+            ? `<div id="branch-${msg.id}" class="ml-6 pl-4 border-l-2 border-gray-200 mt-1">${childrenHtml}</div>`
+            : `<div id="branch-${msg.id}">${childrenHtml}</div>`)
+        : '';
 
         // 加入 reply-branch class 以觸發 CSS 偽元素
         return `
@@ -224,8 +233,19 @@
         if (!parentId || parentId === rootId) return '';
         const parent = globalMsgMap.get(parentId);
         if (!parent) return '';
-        return `<span class="text-xs text-gray-400">回覆</span> <span class="text-xs font-semibold text-blue-500 cursor-pointer hover:underline" onclick="scrollToMsg(${parentId})">@${escHtml(parent.user.name)}</span>`;
-    }
+
+        // 取前 20 個字作為預覽
+        const preview = parent.content ? parent.content.slice(0, 20) + (parent.content.length > 20 ? '...' : '') : '';
+        return `
+        <span class="text-xs text-gray-400">回覆</span> 
+        <span class="text-xs font-semibold text-blue-500 cursor-pointer hover:underline" 
+              onclick="scrollToMsg(${parentId})">@${escHtml(parent.user.name)}</span>
+        <span class="text-xs text-gray-300">·</span>
+        <span class="text-xs text-gray-400 cursor-pointer hover:text-blue-400 hover:underline italic max-w-32 truncate inline-block align-bottom"
+              onclick="scrollToMsg(${parentId})"
+              title="${escHtml(preview)}">「${escHtml(preview)}」</span>
+    `;
+}
 
     function buildTimeLabel(createdAt) {
         if (!createdAt) return '';
@@ -418,28 +438,29 @@
 
     function highlightMsg(msgId) {
         document.querySelectorAll('.msg-highlight').forEach(el => el.classList.remove('msg-highlight'));
-        const el = document.getElementById(`msg-${msgId}`);
+        const el = document.querySelector(`[data-id="${msgId}"]`);
         if (el) el.classList.add('msg-highlight');
     }
     window.scrollToMsg = function(msgId) {
-        const el = document.getElementById(`msg-${msgId}`);
-        if (!el) return;
-        el.scrollIntoView({
-            behavior: 'smooth',
-            block: 'center'
-        });
-        el.classList.add('msg-highlight');
-        setTimeout(() => el.classList.remove('msg-highlight'), 1500);
+        // 找到目標訊息，展開它所在的 replies-wrapper
+        const rootWrap = document.querySelector(`[data-id="${msgId}"]`)?.closest('.replies-wrapper');
+        if (rootWrap && !rootWrap.classList.contains('expanded')) {
+        rootWrap.classList.add('expanded');
+    }
+
+    // 用 data-id 取代 id 避免重複選到
+    const el = document.querySelector(`[data-id="${msgId}"]`);
+    if (!el) return;
+    // 清除舊高亮
+    document.querySelectorAll('.msg-highlight').forEach(e => e.classList.remove('msg-highlight'));
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    // 只高亮 bubble，不影響子元素
+    const bubble = el.querySelector(':scope > .flex > .flex-1 > .msg-bubble, :scope > div > .flex-1 > .msg-bubble');
+    const target = bubble || el;
+    target.classList.add('msg-highlight');
+    setTimeout(() => target.classList.remove('msg-highlight'), 1500);
     };
-    document.addEventListener('change', function(e) {
-        if (e.target.type === 'file') {
-            const file = e.target.files[0];
-            if (file && file.size > 50 * 1024 * 1024) {
-                alert('檔案太大，最大限制為 50MB');
-                e.target.value = '';
-            }
-        }
-    });
 
     function loadMessages() {
         fetch('/api/messages').then(r => r.json()).then(renderMessages);
