@@ -125,26 +125,29 @@ class MessageController extends Controller
 
     // 處理圖片優化與上傳至 S3
     private function handleImageUpload($file)
-    {
-        if (!extension_loaded('gd')) {
-            dd('GD 擴展未載入！請檢查您的 Web 伺服器 PHP 設定。');
-        }
-
-        $filename = 'images/' . time() . '_' . $file->hashName();
-        $manager = new \Intervention\Image\ImageManager(\Intervention\Image\Drivers\Gd\Driver::class);
-        $img = $manager->read($file);
-
-        if ($img->width() > 1200) {
-            $img->scale(width: 1200);
-            $encoded = $img->toJpeg(quality: 80); 
-        } else {
-            $encoded = $img->toJpeg(quality: 90); 
-        }
-        
-        // 儲存圖片到 S3 存儲
-        Storage::disk('s3')->put($filename, (string) $encoded);
-        return $filename;
+{
+    if (!extension_loaded('gd')) {
+        dd('GD 擴展未載入！請檢查您的 Web 伺服器 PHP 設定。');
     }
+
+    $filename = 'images/' . time() . '_' . $file->hashName();
+    $manager = new \Intervention\Image\ImageManager(\Intervention\Image\Drivers\Gd\Driver::class);
+    $img = $manager->read($file);
+
+    if ($img->width() > 1200) {
+        $img->scale(width: 1200);
+        $encoded = $img->toJpeg(quality: 80); 
+    } else {
+        $encoded = $img->toJpeg(quality: 90); 
+    }
+    
+    // 🚀 修正：把 'public' 改成 's3'，讓圖片直飛雲端！
+    Storage::disk('s3')->put($filename, (string) $encoded);
+    return $filename;
+}
+        
+        
+    
 
     // 處理樹狀 Closure 表關聯
     private function storeClosure($descendantId, $parentId) 
