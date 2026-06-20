@@ -155,9 +155,43 @@ private function handleImageUpload($file)
     }
     
     // 儲存圖片到 public 存儲
+    Storage::disk('s3')->put($filename, (string) $encoded);
+    return $filename;
+}
+private function handleImageUpload($file)
+{
+  if (!extension_loaded('gd')) {
+     dd('GD 擴展未載入！請檢查您的 Web 伺服器 PHP 設定。');
+}
+
+  $filename = 'images/' . time() . '_' . $file->hashName();
+    // 使用 v3.x 的 Manager 語法，指定使用 GD 驅動
+  $manager = new \Intervention\Image\ImageManager(\Intervention\Image\Drivers\Gd\Driver::class);
+  $img = $manager->read($file);
+
+  // [新增邏輯]：判斷寬度是否大於 1200px
+  if ($img->width() > 1200) {
+      // 大圖：進行縮放與壓縮
+      $img->scale(width: 1200);
+      $encoded = $img->toJpeg(quality: 80); // 品質設為 80，畫質會更好
+    } else {
+        // 小圖：保持原尺寸，僅進行輕微編碼以確保格式統一為 JPG
+        $encoded = $img->toJpeg(quality: 90); // 小圖不需要縮小，品質維持高標準
+    }
+
+    // 儲存圖片到 public 存儲
     Storage::disk('public')->put($filename, (string) $encoded);
     return $filename;
 }
+
+// 處理樹狀 Closure 表關聯
+private function storeClosure($descendantId, $parentId)
+{
+    // 1. 建立自身關聯
+    \DB::table('message_closure')->insert(['ancestor' => $descendantId, 'descendant' => $descendantId]);
+
+    // 2. 繼承父留言的所有祖先關係
+    $ancestors = \DB::table('message_closure')->where('descendant', $parentId)->get();
 
 // 處理樹狀 Closure 表關聯
 private function storeClosure($descendantId, $parentId) 
@@ -255,3 +289,4 @@ private function storeClosure($descendantId, $parentId)
         ]);    
     }
 }
+

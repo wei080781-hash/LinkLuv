@@ -47,11 +47,13 @@ class User extends Authenticatable
      */
     public function getProfilePhotoUrlAttribute(): string
     {
-        return $this->profile_photo_path
-            ? asset('storage/' . $this->profile_photo_path)
-            : asset('images/default-avatar.png');
-    }
+      if (!$this->profile_photo_path) {
+	return asset('images/default-avatar.png');
+      }
 
+      return \Storage::disk('s3')->url($this->profile_photo_path);
+
+    }
     /**
      * Get the attributes that should be cast.
      *
