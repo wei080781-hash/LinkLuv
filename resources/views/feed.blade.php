@@ -260,7 +260,7 @@
 
     function buildMediaHtml(msg) {
         // 🚀 已完美對接你們的 AWS S3 儲存桶網址
-        const s3BaseUrl = 'https://linkluv-media-bucket.s3.amazonaws.com/';
+        const s3BaseUrl = 'https://s3.ap-east-2.amazonaws.com/linkluv-media-bucket/';
         if (msg.media_type === 'image' && msg.image_path) {
            // 💡 判斷路徑：如果是新資料走 S3 就補上 S3 網域，如果是舊資料本地暫存就走 /storage/ 
            const isS3 = msg.image_path.startsWith('images/') || !msg.image_path.startsWith('storage/');
