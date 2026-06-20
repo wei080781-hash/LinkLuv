@@ -259,10 +259,22 @@
     }
 
     function buildMediaHtml(msg) {
-        if (msg.media_type === 'image' && msg.image_path)
-        return `<div class="msg-media"><img src="/storage/${msg.image_path}" onclick="openLightbox('image','/storage/${msg.image_path}')"></div>`;
-        if (msg.media_type === 'video' && msg.video_path)
-        return `<div class="msg-media"><video controls preload="metadata"><source src="/storage/${msg.video_path}" type="video/mp4">您的瀏覽器不支援影片播放。</video></div>`;
+        // 🚀 已完美對接你們的 AWS S3 儲存桶網址
+        const s3BaseUrl = 'https://linkluv-media-bucket.s3.amazonaws.com/';
+        if (msg.media_type === 'image' && msg.image_path) {
+           // 💡 判斷路徑：如果是新資料走 S3 就補上 S3 網域，如果是舊資料本地暫存就走 /storage/ 
+           const isS3 = msg.image_path.startsWith('images/') || !msg.image_path.startsWith('storage/');
+           const imgUrl = isS3 ? `${s3BaseUrl}${msg.image_path}` : `/storage/${msg.image_path}`;
+           return `<div class="msg-media"><img src="${imgUrl}" onclick="openLightbox('image','${imgUrl}')"></div>`;
+        }
+        if (msg.media_type === 'video' && msg.video_path) {
+            // 💡 影片經過壓縮後也上傳到 S3 (路徑為 videos/xxx.mp4)，同樣補上 S3 網域
+            const isS3 = msg.video_path.startsWith('videos/') || !msg.video_path.startsWith('storage/');
+            const videoUrl = isS3 ? `${s3BaseUrl}${msg.video_path}` : `/storage/${msg.video_path}`;
+            
+            return `<div class="msg-media"><video controls preload="metadata"><source src="${videoUrl}" type="video/mp4">您的瀏覽器不支援影片播放。</video></div>`;
+        }
+        
         return '';
     }
 
