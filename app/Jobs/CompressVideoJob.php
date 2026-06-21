@@ -51,10 +51,15 @@ public function handle()
 
         // 🚀 修正 1：改用 X264() 空建構子，手動指名 'aac'，避開 libmp3lame 崩潰
         $format = new X264();
-        $format->setAudioCodec('aac'); 
+        $format->setAudioCodec('aac');
         $format->setVideoCodec('libx264');
-        $format->setAdditionalParameters(['-crf', '28']);
-
+        $format->setKiloBitrate(1000);
+        $format->setAudioKiloBitrate(128);
+        $format->setAdditionalParameters([
+            '-crf', '28',
+            '-preset', 'fast',
+            '-movflags', '+faststart',
+        ]);
         // 先在 Ubuntu 本地端壓好
         $video->save($format, $localCompressedPath);
 
