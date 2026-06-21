@@ -69,7 +69,10 @@ public function handle()
             
             // 丟上 S3 磁碟
             // ✅ 修正後的新寫法（上傳同時強制蓋上「公開」印章）
-            Storage::disk('s3')->put($s3Key, $fileContents, 'public');
+            Storage::disk('s3')->put($s3Key, $fileContents, [
+                'visibility' => 'public',
+                'ACL' => 'public-read',
+            ]);
 
             // 3. 更新資料庫中的影片網址為 S3 的路徑
             $this->message->update(['video_path' => $s3Key]);
