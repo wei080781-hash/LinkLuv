@@ -24,10 +24,12 @@ class CompressVideoJob implements ShouldQueue
      public function handle()
 {
     try {
-        $ffmpeg = FFMpeg::create([
-            'ffmpeg.binaries'  => 'D:/ffmpeg-8.1.1-full_build/ffmpeg-8.1.1-full_build/bin/ffmpeg.exe',
-            'ffprobe.binaries' => 'D:/ffmpeg-8.1.1-full_build/ffmpeg-8.1.1-full_build/bin/ffprobe.exe',
+        // ✅ 修正後的寫法：優先讀取環境變數，若無則自動在 Linux 尋找全域指令
+        $ffmpeg = \FFMpeg\FFMpeg::create([
+            'ffmpeg.binaries'  => PHP_OS_FAMILY === 'Windows' ? 'D:/ffmpeg-8.1.1-full_build/ffmpeg-8.1.1-full_build/bin/ffmpeg.exe' : '/usr/bin/ffmpeg',
+            'ffprobe.binaries' => PHP_OS_FAMILY === 'Windows' ? 'D:/ffmpeg-8.1.1-full_build/ffmpeg-8.1.1-full_build/bin/ffprobe.exe' : '/usr/bin/ffprobe',
             'timeout'          => 3600,
+            'ffmpeg.threads'   => 12,
         ]);
 
         $originalPath = $this->message->video_path;
