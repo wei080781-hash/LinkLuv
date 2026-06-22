@@ -11,7 +11,7 @@ use App\Jobs\CompressVideoJob;
 
 class MessageController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
         $page = $request->get('page', 1);
         $perPage = 20;
