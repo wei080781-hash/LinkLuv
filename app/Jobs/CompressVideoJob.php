@@ -76,9 +76,11 @@ public function handle()
 
             // 3. 更新資料庫中的影片網址為 S3 的路徑
             $this->message->update(['video_path' => $s3Key]);
-            
+
             // ✅ 加這行，清除快取讓前端拿到新資料
-            \Cache::forget('global_messages_feed');
+            for ($i = 1; $i <= 10; $i++) {
+                \Cache::forget("messages_feed_page_{$i}");
+            }
 
             // 🚀 修正 3：擦乾淨屁股，刪除 Ubuntu 本地硬碟的「原始片」與「壓縮片」
             Storage::disk('public')->delete($originalPath); // 刪除原始檔
