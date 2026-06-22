@@ -226,22 +226,35 @@
 
     /* ... (其餘函式維持不變) ... */
     function buildReplyForm(msgId, rootId) {
-        return `<div id="rform-${msgId}" class="reply-form-wrap items-center gap-2 mt-1.5 flex-wrap"><form onsubmit="submitReply(event, ${rootId})" class="flex gap-2 w-full items-center"><input type="hidden" name="parent_id" value="${msgId}"><input type="text" name="content" placeholder="回覆..." class="flex-1 min-w-24 rounded-full text-sm px-4 py-1.5 border border-gray-300 outline-none focus:border-blue-400 transition-colors"><label class="text-gray-400 text-base cursor-pointer flex-shrink-0" title="上傳圖片或影片">📎<input type="file" name="media" accept="image/*,video/mp4,video/mov,video/ogg" class="hidden" onchange="previewMedia(this,'fprev-${msgId}')"></label><button type="submit" class="text-blue-600 text-sm font-bold bg-transparent border-none cursor-pointer whitespace-nowrap">送出</button></form><div id="fprev-${msgId}" class="msg-media"></div></div>`;
+        return `<div id="rform-${msgId}" class="reply-form-wrap items-center gap-2 mt-1.5 flex-wrap">
+            <form action="/messages" method="POST" onsubmit="submitReply(event, ${rootId})" class="flex gap-2 w-full items-center">
+                <input type="hidden" name="parent_id" value="${msgId}">
+                <input type="text" name="content" placeholder="回覆..." class="flex-1 min-w-24 rounded-full text-sm px-4 py-1.5 border border-gray-300 outline-none focus:border-blue-400 transition-colors">
+                <label class="text-gray-400 text-base cursor-pointer flex-shrink-0" title="上傳圖片或影片">📎
+                    <input type="file" name="media" accept="image/*,video/mp4,video/mov,video/ogg" class="hidden" onchange="previewMedia(this,'fprev-${msgId}')">
+                </label>
+                <button type="submit" class="text-blue-600 text-sm font-bold bg-transparent border-none cursor-pointer whitespace-nowrap">送出</button>
+            </form>
+            <div id="fprev-${msgId}" class="msg-media"></div>
+        </div>`;
     }
 
-    function buildReplyForm(msgId, rootId) {
-    // 🚀 修正：這裡的 form 也要明確補上 action="/messages" method="POST"
-    return `<div id="rform-${msgId}" class="reply-form-wrap items-center gap-2 mt-1.5 flex-wrap">
-        <form action="/messages" method="POST" onsubmit="submitReply(event, ${rootId})" class="flex gap-2 w-full items-center">
-            <input type="hidden" name="parent_id" value="${msgId}">
-            <input type="text" name="content" placeholder="回覆..." class="flex-1 min-w-24 rounded-full text-sm px-4 py-1.5 border border-gray-300 outline-none focus:border-blue-400 transition-colors">
-            <label class="text-gray-400 text-base cursor-pointer flex-shrink-0" title="上傳圖片或影片">📎
-                <input type="file" name="media" accept="image/*,video/mp4,video/mov,video/ogg" class="hidden" onchange="previewMedia(this,'fprev-${msgId}')">
-            </label>
-            <button type="submit" class="text-blue-600 text-sm font-bold bg-transparent border-none cursor-pointer whitespace-nowrap">送出</button>
-        </form>
-        <div id="fprev-${msgId}" class="msg-media"></div>
-    </div>`;
+    function buildReplyingToTag(parentId, rootId) {
+        if (!parentId || parentId === rootId) return '';
+        const parent = globalMsgMap.get(parentId);
+        if (!parent) return '';
+
+        // 取前 20 個字作為預覽
+        const preview = parent.content ? parent.content.slice(0, 20) + (parent.content.length > 20 ? '...' : '') : '';
+        return `
+        <span class="text-xs text-gray-400">回覆</span> 
+        <span class="text-xs font-semibold text-blue-500 cursor-pointer hover:underline" 
+              onclick="scrollToMsg(${parentId})">@${escHtml(parent.user.name)}</span>
+        <span class="text-xs text-gray-300">·</span>
+        <span class="text-xs text-gray-400 cursor-pointer hover:text-blue-400 hover:underline italic max-w-32 truncate inline-block align-bottom"
+              onclick="scrollToMsg(${parentId})"
+              title="${escHtml(preview)}">「${escHtml(preview)}」</span>
+    `;
 }
 
     function buildTimeLabel(createdAt) {
