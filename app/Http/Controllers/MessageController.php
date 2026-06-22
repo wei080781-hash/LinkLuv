@@ -13,12 +13,14 @@ class MessageController extends Controller
 {
     public function index()
     {
+        $page = $request->get('page', 1);
+        $perPage = 20;
         // 1. 從 Redis 讀取全域訊息快取 (若無則查詢 DB 並存入 1 小時)
-        $messages = Cache::remember('global_messages_feed', 60, function () {
+        $messages = Cache::remember("messages_feed_page_{$page}", 60, function () use ($page, $perPage) {
              return Message::with(['user', 'parent.user'])
                  ->withCount('likes')
                  ->orderBy('path', 'ASC') // 物化路徑排序，確保父在子前
-                 ->get();
+                 ->paginate($perPage, ['*'], 'page', $page);
          });
 
          // 2. 獲取目前用戶的點讚清單 (不快取，因為每個人不同)
@@ -26,15 +28,19 @@ class MessageController extends Controller
             ? auth()->user()->likes()->pluck('message_id', 'message_id')->toArray() 
             : [];
 
-        // 3. 在記憶體中動態合併個人化狀態
-        return $messages->map(function ($msg) use ($likedIds) {
+        
+        $items = collect($messages->items())->map(function ($msg) use ($likedIds) {
             $msg->is_liked = isset($likedIds[$msg->id]);
-
             // ★ 附加 parent_user_name，供前端 @mention 使用
             $msg->parent_user_name = $msg->parent?->user?->name ?? null;
-
             return $msg;
-        });    
+        });
+        
+        return response()->json([
+            'data' => $items,
+            'has_more' => $messages->hasMorePages(),
+            'next_page' => $messages->currentPage() + 1,
+        ]);    
     }
 
     // 處理留言的儲存與列表獲取，並處理階層深度邏輯。
@@ -119,7 +125,9 @@ class MessageController extends Controller
         }
 
         // 清除快取並回傳
-        Cache::forget('global_messages_feed'); 
+        for ($i = 1; $i <= 10; $i++) {
+            Cache::forget("messages_feed_page_{$i}");
+        } 
         return response()->json(['success' => true]);
     }
 
@@ -178,7 +186,9 @@ class MessageController extends Controller
         $message->replies()->delete();
         $message->delete();
 
-        Cache::forget('global_messages_feed');    
+        for ($i = 1; $i <= 10; $i++) {
+            Cache::forget("messages_feed_page_{$i}");
+        }     
         return response()->json(['success' => true]);
     }
 
@@ -206,7 +216,9 @@ class MessageController extends Controller
             'content' => $validated['content'],
         ]);
 
-        Cache::forget('global_messages_feed');
+        for ($i = 1; $i <= 10; $i++) {
+            Cache::forget("messages_feed_page_{$i}");
+        } 
         return response()->json(['success' => true]);
     }
 
@@ -223,7 +235,9 @@ class MessageController extends Controller
             $isLiked = true;
         }
 
-        Cache::forget('global_messages_feed');
+        for ($i = 1; $i <= 10; $i++) {
+            Cache::forget("messages_feed_page_{$i}");
+        } 
 
         return response()->json([
              'success' => true, 

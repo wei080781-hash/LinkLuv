@@ -355,7 +355,7 @@
             }
         }).then(r => r.json()).then(() => {
             expandedSet.add(rootId);
-            loadMessages();
+            loadMessages(true);
         });
     };
     window.submitPost = function(e) {
@@ -374,7 +374,7 @@
             }
         }).then(r => r.json()).then(d => {
             if (d.success) {
-                loadMessages();
+                loadMessages(true);
                 e.target.reset();
             }
         });
@@ -473,10 +473,58 @@
     target.classList.add('msg-highlight');
     setTimeout(() => target.classList.remove('msg-highlight'), 1500);
     };
+    let currentPage = 1;
+    let isLoading = false;
+    let hasMore = true;
 
-    function loadMessages() {
-        fetch('/api/messages').then(r => r.json()).then(renderMessages);
+    function loadMessages(reset = false) {
+        if (isLoading || (!hasMore && !reset)) return;
+
+        if (reset) {
+            currentPage = 1;
+            hasMore = true;
+            document.getElementById('messages-list').innerHTML = '';
+            globalMsgMap = new Map();
+        }
+
+        isLoading = true;
+
+        fetch(`/api/messages?page=${currentPage}`)
+            .then(r => r.json())
+            .then(response => {
+                appendMessages(response.data);
+                hasMore = response.has_more;
+                currentPage = response.next_page;
+                isLoading = false;
+            });
     }
+
+    function appendMessages(messages) {
+        const list = document.getElementById('messages-list');
+        messages.forEach(m => globalMsgMap.set(m.id, { ...m, children: [] }));
+
+        const roots = [];
+        messages.forEach(m => {
+            if (!m.parent_id) roots.push(globalMsgMap.get(m.id));
+            else {
+                const parent = globalMsgMap.get(m.parent_id);
+                if (parent) parent.children.push(globalMsgMap.get(m.id));
+                else roots.push(globalMsgMap.get(m.id));
+            }
+        });
+        
+        roots.forEach(root => list.insertAdjacentHTML('beforeend', buildRootHTML(root)));
+    }
+    // 滾動到底部自動載入
+    window.addEventListener('scroll', function() {
+        const scrollTop = window.scrollY;
+        const windowHeight = window.innerHeight;
+        const docHeight = document.documentElement.scrollHeight;
+
+        if (scrollTop + windowHeight >= docHeight - 300) {
+            loadMessages();
+        }
+    });        
     loadMessages();
     </script>
 </x-app-layout>
