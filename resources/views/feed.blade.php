@@ -483,6 +483,11 @@
     target.classList.add('msg-highlight');
     setTimeout(() => target.classList.remove('msg-highlight'), 1500);
     };
+
+
+    // ==========================================
+    // 請完整替換這一段，確保括號完美對齊
+    // ==========================================
     let currentPage = 1;
     let isLoading = false;
     let hasMore = true;
@@ -506,8 +511,8 @@
                 hasMore = response.has_more;
                 currentPage = response.next_page;
                 isLoading = false;
-            });
-    }
+            }); // 這裡只有一個 }); 負責結束 fetch
+    } // 這裡的 } 負責結束整個 loadMessages 函式
 
     function appendMessages(messages) {
         const list = document.getElementById('messages-list');
@@ -525,6 +530,7 @@
         
         roots.forEach(root => list.insertAdjacentHTML('beforeend', buildRootHTML(root)));
     }
+
     // 滾動到底部自動載入
     window.addEventListener('scroll', function() {
         const scrollTop = window.scrollY;
@@ -535,6 +541,7 @@
             loadMessages();
         }
     });        
-    ();
+    
+    loadMessages();       
     </script>
 </x-app-layout>
