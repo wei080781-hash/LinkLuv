@@ -535,6 +535,6 @@
             loadMessages();
         }
     });        
-    loadMessages();
+    ();
     </script>
 </x-app-layout>
