@@ -37,4 +37,3 @@ Route::get('/profile/{id}', function ($id) {
 })->name('profile.show');
 
 require __DIR__.'/auth.php';
-EOF
