@@ -1,4 +1,3 @@
-cat > /var/www/linkluv/routes/web.php << 'EOF'
 <?php
 
 use App\Http\Controllers\MessageController;
