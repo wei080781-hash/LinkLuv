@@ -91,7 +91,7 @@
     </form>
 
     {{-- 移除頭像用的獨立隱藏 Form --}}
-    <form id="delete-photo" action="{{ route('profile.photo.delete') }}" method="POST" class="hidden">
+    <form id="delete-photo-form" action="{{ route('profile.photo.delete') }}" method="POST" class="hidden">
         @csrf
         @method('DELETE')
     </form>
