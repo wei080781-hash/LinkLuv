@@ -48,7 +48,7 @@ class User extends Authenticatable
     public function getProfilePhotoUrlAttribute(): string
     {
       if (!$this->profile_photo_path) {
-	return asset('images/default-avatar.png');
+	    return asset('images/default-avatar.svg');
       }
 
       return \Storage::disk('s3')->url($this->profile_photo_path);
