@@ -1,5 +1,5 @@
 <x-app-layout>
-    <div class="bg-gray-50 pb-12 pt-6 min-h-[80vh]">
+    <div class="py-12 bg-gray-50">
         <div class="max-w-4xl mx-auto px-6">
             <h2 class="font-semibold text-2xl text-gray-800 leading-tight mb-8">生活牆</h2>
             @include('components.message-form')
