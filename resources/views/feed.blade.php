@@ -488,62 +488,17 @@
     };
 
 
-    // ==========================================
-    // 請完整替換這一段，確保括號完美對齊
-    // ==========================================
-    let currentPage = 1;
-    let isLoading = false;
-    let hasMore = true;
+// ==========================================
+// 請完整替換這一段，確保括號完美對齊
+// ==========================================
+let currentPage = 1;
+let isLoading = false;
+let hasMore = true;
 
-    function loadMessages(reset = false) {
-        if (isLoading || (!hasMore && !reset)) return;
+const sentinel = document.getElementById('scroll-sentinel');
+const loadingIndicator = document.getElementById('loading-indicator');
 
-        if (reset) {
-            currentPage = 1;
-            hasMore = true;
-            document.getElementById('messages-list').innerHTML = '';
-            globalMsgMap = new Map();
-        }
-
-        loadingIndicator.classList.add('hidden');
-        if (!hasMore) {
-            sentinel.innerHTML = '<span class="text-sm text-gray-300">已顯示全部訊息</span>';
-            observer.disconnect();
-        }
-        isLoading = false;
-
-        fetch(`/api/messages?page=${currentPage}`)
-            .then(r => r.json())
-            .then(response => {
-                appendMessages(response.data);
-                hasMore = response.has_more;
-                currentPage = response.next_page;
-                isLoading = false;
-            }); // 這裡只有一個 }); 負責結束 fetch
-    } // 這裡的 } 負責結束整個 loadMessages 函式
-
-    function appendMessages(messages) {
-        const list = document.getElementById('messages-list');
-        messages.forEach(m => globalMsgMap.set(m.id, { ...m, children: [] }));
-
-        const roots = [];
-        messages.forEach(m => {
-            if (!m.parent_id) roots.push(globalMsgMap.get(m.id));
-            else {
-                const parent = globalMsgMap.get(m.parent_id);
-                if (parent) parent.children.push(globalMsgMap.get(m.id));
-                else roots.push(globalMsgMap.get(m.id));
-            }
-        });
-        
-        roots.forEach(root => list.insertAdjacentHTML('beforeend', buildRootHTML(root)));
-    }
-
-    // 滾動到底部自動載入
-    window.addEventListener('scroll', function() {
-        const sentinel = document.getElementById('scroll-sentinel');
-        const loadingIndicator = document.getElementById('loading-indicator');
-        const observer = new IntersectionObserver((entries) => {
+const observer = new IntersectionObserver((entries) => {
     if (entries[0].isIntersecting && !isLoading && hasMore) {
         loadingIndicator.classList.remove('hidden');
         loadMessages();
@@ -551,7 +506,51 @@
 }, { rootMargin: '0px 0px 100px 0px' });
 
 observer.observe(sentinel);
-    
-    loadMessages();       
+
+function loadMessages(reset = false) {
+    if (isLoading || (!hasMore && !reset)) return;
+
+    if (reset) {
+        currentPage = 1;
+        hasMore = true;
+        document.getElementById('messages-list').innerHTML = '';
+        globalMsgMap = new Map();
+    }
+
+    isLoading = true;
+
+    fetch(`/api/messages?page=${currentPage}`)
+        .then(r => r.json())
+        .then(response => {
+            appendMessages(response.data);
+            hasMore = response.has_more;
+            currentPage = response.next_page;
+            isLoading = false;
+            loadingIndicator.classList.add('hidden');
+            if (!hasMore) {
+                sentinel.innerHTML = '<span class="text-sm text-gray-300">已顯示全部訊息</span>';
+                observer.disconnect();
+            }
+        });
+}
+
+function appendMessages(messages) {
+    const list = document.getElementById('messages-list');
+    messages.forEach(m => globalMsgMap.set(m.id, { ...m, children: [] }));
+
+    const roots = [];
+    messages.forEach(m => {
+        if (!m.parent_id) roots.push(globalMsgMap.get(m.id));
+        else {
+            const parent = globalMsgMap.get(m.parent_id);
+            if (parent) parent.children.push(globalMsgMap.get(m.id));
+            else roots.push(globalMsgMap.get(m.id));
+        }
+    });
+
+    roots.forEach(root => list.insertAdjacentHTML('beforeend', buildRootHTML(root)));
+}
+
+loadMessages();      
     </script>
 </x-app-layout>
