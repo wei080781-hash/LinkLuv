@@ -4,6 +4,9 @@
             <h2 class="font-semibold text-2xl text-gray-800 leading-tight mb-8">生活牆</h2>
             @include('components.message-form')
             <div id="messages-list" class="flex flex-col gap-4"></div>
+            <div id="scroll-sentinel" class="h-8 flex items-center justify-center">
+                <span id="loading-indicator" class="text-sm text-gray-400 hidden">載入中...</span>
+            </div>
         </div>
     </div>
 
@@ -502,7 +505,12 @@
             globalMsgMap = new Map();
         }
 
-        isLoading = true;
+        loadingIndicator.classList.add('hidden');
+        if (!hasMore) {
+            sentinel.innerHTML = '<span class="text-sm text-gray-300">已顯示全部訊息</span>';
+            observer.disconnect();
+        }
+        isLoading = false;
 
         fetch(`/api/messages?page=${currentPage}`)
             .then(r => r.json())
@@ -533,14 +541,16 @@
 
     // 滾動到底部自動載入
     window.addEventListener('scroll', function() {
-        const scrollTop = window.scrollY;
-        const windowHeight = window.innerHeight;
-        const docHeight = document.documentElement.scrollHeight;
+        const sentinel = document.getElementById('scroll-sentinel');
+        const loadingIndicator = document.getElementById('loading-indicator');
+        const observer = new IntersectionObserver((entries) => {
+    if (entries[0].isIntersecting && !isLoading && hasMore) {
+        loadingIndicator.classList.remove('hidden');
+        loadMessages();
+    }
+}, { rootMargin: '0px 0px 100px 0px' });
 
-        if (scrollTop + windowHeight >= docHeight - 300) {
-            loadMessages();
-        }
-    });        
+observer.observe(sentinel);
     
     loadMessages();       
     </script>
