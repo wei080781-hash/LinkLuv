@@ -181,40 +181,73 @@
     // ==========================================
     // 3. 功能操作：發文、回覆、按讚、刪除、編輯 (皆改為無感更新)
     // ==========================================
-    window.submitPost = function(e) {
-        e.preventDefault();
+    window.submitPost = function(formElement, e) {
+        // 1. 確保表單送出時不會跳轉頁面
+        e.preventDefault(); // 阻止頁面跳轉
         const form = e.target;
+
+        // 2. 除錯檢查：確認 form 是否正確選取
+        console.log("偵測到表單提交，表單對象:", form);
+
         const fi = form.querySelector('input[type="file"]');
         
+        // 檢查檔案大小邏輯 (保持不變)
         if (fi?.files.length > 0 && fi.files[0].size > 50 * 1024 * 1024) {
             alert('檔案太大，最大限制為 50MB');
             fi.value = '';
             return;
         }
 
+        // 3. 獲取 CSRF Token (如果這裡出錯，程式會中斷)
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+        if (!csrfToken) {
+            console.error("錯誤：找不到 CSRF Token，請檢查 HTML head 內是否設定 meta 標籤");
+            alert("系統安全設定錯誤，請重新整理頁面");
+            return;
+        }
+        
+        // 4. 發送請求
         fetch("{{ route('messages.store') }}", {
             method: 'POST',
             body: new FormData(form),
             headers: {
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                'X-CSRF-TOKEN': csrfToken
             }
         })
-        .then(r => r.json())
+        .then(async r => {
+            // 除錯檢查：看看 HTTP 狀態碼
+            console.log("伺服器回應狀態:", r.status);
+
+            // 處理非 200 的錯誤 (如 419 Page Expired 或 500 Server Error)
+            if (!r.ok) {
+                const errorText = await r.text();
+                console.error("伺服器錯誤內容:", errorText);
+                throw new Error(`伺服器錯誤 (${r.status})`);
+            }
+            return r.json();
+        })        
         .then(d => {
-            if (d.success && d.message) {
+            console.log("伺服器成功解析 JSON:", d);
+
+            if (d.success) {
                 const list = document.getElementById('messages-list');
                 const newMsg = { ...d.message, children: [] };
                 globalMsgMap.set(newMsg.id, newMsg);
                 
                 list.insertAdjacentHTML('afterbegin', buildRootHTML(newMsg));
                 form.reset();
+
+                // 處理預覽圖清除
                 const previewEl = form.querySelector('[id^="fprev-"]') || document.getElementById('form-preview');
                 if (previewEl) previewEl.innerHTML = '';
             } else {
                 alert(d.message || '發文失敗');
             }
         })
-        .catch(err => console.error('發文發生錯誤:', err));
+        .catch(err => {
+            console.error('發文發生錯誤:', err);
+            alert('發文失敗，請查看瀏覽器 Console (F12) 的詳細錯誤資訊');
+        });      
     };
     
     window.submitReply = function(e, rootId) {
