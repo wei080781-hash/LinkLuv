@@ -211,7 +211,7 @@
             method: 'POST',
             body: new FormData(form),
             headers: {
-                'X-CSRF-TOKEN': csrfToken
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
             }
         })
         .then(async r => {
@@ -230,16 +230,32 @@
             console.log("伺服器成功解析 JSON:", d);
 
             if (d.success) {
-                const list = document.getElementById('messages-list');
-                const newMsg = { ...d.message, children: [] };
-                globalMsgMap.set(newMsg.id, newMsg);
-                
-                list.insertAdjacentHTML('afterbegin', buildRootHTML(newMsg));
-                form.reset();
+                try {
+                    const list = document.getElementById('messages-list');
+                    if (!list) {
+                        console.error("找不到 #messages-list 元素，無法插入 HTML");
+                        return;
+                    }
 
-                // 處理預覽圖清除
-                const previewEl = form.querySelector('[id^="fprev-"]') || document.getElementById('form-preview');
-                if (previewEl) previewEl.innerHTML = '';
+                    // 確保 d.message 存在，這是最可能導致 TypeError 的地方
+                    if (!d.message) {
+                        console.error("後端成功但沒有回傳 message 物件，請檢查 Controller 回傳內容");
+                        return;
+                    }
+
+                    const newMsg = { ...d.message, children: [] };
+                    globalMsgMap.set(newMsg.id, newMsg);
+                    
+                    list.insertAdjacentHTML('afterbegin', buildRootHTML(newMsg));
+                    form.reset();
+
+                    // 處理預覽圖清除
+                    const previewEl = form.querySelector('[id^="fprev-"]') || document.getElementById('form-preview');
+                    if (previewEl) previewEl.innerHTML = '';
+
+                } catch (innerErr) {
+                    console.error("渲染訊息時發生錯誤 (DOM 或 HTML 生成失敗):", innerErr);
+                }
             } else {
                 alert(d.message || '發文失敗');
             }
