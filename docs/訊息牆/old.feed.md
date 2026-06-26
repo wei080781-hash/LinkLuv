@@ -101,274 +101,30 @@
     </style>
 
     <script>
-    // ==========================================
-    // 1. 全域狀態宣告（統一收納在最上方，避免重複宣告與打架）
-    // ==========================================   
     /* ... (資料處理邏輯保持不變) ... */
     const expandedSet = new Set();
     let globalMsgMap = new Map();
-    let currentPage = 1;
-    let isLoading = false;
-    let hasMore = true;
 
-    function loadMessages(reset = false) {
-        if (isLoading || (!hasMore && !reset)) return;
-
-        if (reset) {
-            currentPage = 1;
-            hasMore = true;
-            document.getElementById('messages-list').innerHTML = '';
-            globalMsgMap.clear();
-        }
-        isLoading = true;
-        
-        fetch(`/api/messages?page=${currentPage}`)
-            .then(r => r.json())
-            .then(response => {
-                appendMessages(response.data);
-                hasMore = response.has_more;
-                currentPage = response.next_page;
-            })
-            .catch(err => console.error('載入生活牆失敗:', err))
-            .finally(() => {
-                isLoading = false; 
-            });
-    }
-
-    function appendMessages(messages) {
+    function renderMessages(messages) {
         const list = document.getElementById('messages-list');
-
-        messages.forEach(m => {
-            if (!globalMsgMap.has(m.id)) {
-                globalMsgMap.set(m.id, { ...m, children: [] });
-            }
-        });
-
+        list.innerHTML = '';
+        globalMsgMap = new Map();
+        messages.forEach(m => globalMsgMap.set(m.id, {
+            ...m,
+            children: []
+        }));
         const roots = [];
         messages.forEach(m => {
-            if (!m.parent_id) {
-                roots.push(globalMsgMap.get(m.id));
-            } else {
+            if (!m.parent_id) roots.push(globalMsgMap.get(m.id));
+            else {
                 const parent = globalMsgMap.get(m.parent_id);
-                if (parent) {
-                    if (!parent.children.some(c => c.id === m.id)) {
-                        parent.children.push(globalMsgMap.get(m.id));
-                    }
-                } else {
-                    roots.push(globalMsgMap.get(m.id));
-                }
+                if (parent) parent.children.push(globalMsgMap.get(m.id));
+                else roots.push(globalMsgMap.get(m.id));
             }
         });
+        roots.forEach(root => list.insertAdjacentHTML('beforeend', buildRootHTML(root)));
+    }
 
-        roots.forEach(root => {
-            if (!document.getElementById(`msg-${root.id}`)) {
-                list.insertAdjacentHTML('beforeend', buildRootHTML(root));
-            }
-        });
-    } 
-
-    // 無限滾動監聽
-    window.addEventListener('scroll', function() {
-        if (!hasMore || isLoading) return;
-        const scrollTop = window.scrollY || document.documentElement.scrollTop;
-        const windowHeight = window.innerHeight;
-        const docHeight = document.documentElement.scrollHeight;
-
-        if (scrollTop + windowHeight >= docHeight - 300) {
-            loadMessages(false);
-        }
-    });
-    // ==========================================
-    // 3. 功能操作：發文、回覆、按讚、刪除、編輯 (皆改為無感更新)
-    // ==========================================
-    window.submitPost = function(e) {
-        e.preventDefault();
-        const form = e.target;
-        const fi = form.querySelector('input[type="file"]');
-        
-        if (fi?.files.length > 0 && fi.files[0].size > 50 * 1024 * 1024) {
-            alert('檔案太大，最大限制為 50MB');
-            fi.value = '';
-            return;
-        }
-
-        fetch("{{ route('messages.store') }}", {
-            method: 'POST',
-            body: new FormData(form),
-            headers: {
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
-            }
-        })
-        .then(r => r.json())
-        .then(d => {
-            if (d.success && d.message) {
-                const list = document.getElementById('messages-list');
-                const newMsg = { ...d.message, children: [] };
-                globalMsgMap.set(newMsg.id, newMsg);
-                
-                list.insertAdjacentHTML('afterbegin', buildRootHTML(newMsg));
-                form.reset();
-                const previewEl = form.querySelector('[id^="fprev-"]') || document.getElementById('form-preview');
-                if (previewEl) previewEl.innerHTML = '';
-            } else {
-                alert(d.message || '發文失敗');
-            }
-        })
-        .catch(err => console.error('發文發生錯誤:', err));
-    };
-    
-    window.submitReply = function(e, rootId) {
-        e.preventDefault();
-        const form = e.target;
-        const contentInput = form.querySelector('input[name="content"]');
-        const fileInput = form.querySelector('input[type="file"]');
-        
-        if (!contentInput.value.trim() && (!fileInput || !fileInput.files.length)) {
-            alert('請輸入回覆內容或上傳媒體');
-            return;
-        }
-
-        fetch("{{ route('messages.store') }}", {
-            method: 'POST',
-            body: new FormData(form),
-            headers: {
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
-            }
-        })
-
-        .then(r => r.json())
-        .then(d => {
-            if (d.success && d.message) {
-                const newReply = { ...d.message, children: [] };
-                globalMsgMap.set(newReply.id, newReply);
-
-                const parentId = d.message.parent_id;
-                const parentMsg = globalMsgMap.get(parentId);
-                if (parentMsg && !parentMsg.children.some(c => c.id === newReply.id)) {
-                    parentMsg.children.push(newReply);
-                }
-
-                let rwrap = document.getElementById(`rwrap-${rootId}`);
-                if (rwrap) {
-                    let container = rwrap.querySelector('.ml-5.pl-4.border-l-2');
-                    const newHtml = buildReplyHTML(newReply, rootId, new Set(), 1);
-                    
-                    if (container) {
-                        container.insertAdjacentHTML('beforeend', newHtml);
-                    }
-                    
-                    if (!rwrap.classList.contains('expanded')) {
-                        rwrap.classList.add('expanded');
-                        expandedSet.add(rootId);
-                        const label = document.getElementById(`tlabel-${rootId}`);
-                        const btn = document.getElementById(`tbtn-${rootId}`);
-                        const arrow = btn ? btn.querySelector('.toggle-arrow') : null;
-                        if (label) label.textContent = '隱藏回覆';
-                        if (arrow) arrow.classList.add('rotate-180');
-                    }
-                }
-
-                form.reset();
-                const previewEl = document.getElementById(`fprev-${parentId}`);
-                if (previewEl) previewEl.innerHTML = '';
-                form.closest('.reply-form-wrap')?.classList.remove('show');
-            } else {
-                alert(d.message || '回覆失敗');
-            }
-        })
-        .catch(err => console.error('回覆發生錯誤:', err));
-    };
-
-    window.toggleLike = function(id) {
-        fetch(`/messages/${id}/like`, {
-            method: 'POST',
-            headers: {
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
-            },
-        })
-        .then(r => r.json())
-        .then(d => {
-            if (d.success) {
-                const lcount = document.getElementById(`lcount-${id}`);
-                const btn = lcount?.closest('.like-btn');
-                if (lcount) lcount.textContent = d.likes_count;
-                if (btn) {
-                    if (d.liked) {
-                        btn.classList.add('text-pink-500', 'font-bold');
-                        btn.classList.remove('text-gray-400');
-                    } else {
-                        btn.classList.remove('text-pink-500', 'font-bold');
-                        btn.classList.add('text-gray-400');
-                    }
-                }
-                const msg = globalMsgMap.get(id);
-                if (msg) { msg.is_liked = d.liked; msg.likes_count = d.likes_count; }
-            }
-        });
-    };
-
-    window.deleteMsg = function(id) {
-        if (!confirm('確定要刪除這則訊息嗎？')) return;
-        fetch(`/messages/${id}`, {
-            method: 'DELETE',
-            headers: {
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
-            }
-        }).then(r => r.json()).then(d => {
-            if (d.success) {
-                const el = document.getElementById(`msg-${id}`);
-                if (el) el.remove();
-                globalMsgMap.delete(id);
-            }
-        });
-    };
-
-    window.editMsg = function(id) {
-        const msg = globalMsgMap.get(id);
-        if (!msg) return;
-        const p = document.getElementById(`content-${id}`);
-        if (!p || document.getElementById(`edit-ta-${id}`)) return;
-
-        const currentContent = msg.content;
-        p.innerHTML = `
-            <textarea id="edit-ta-${id}" class="w-full text-sm p-2 border border-gray-300 rounded-xl outline-none focus:border-blue-400 bg-white resize-none" rows="2">${escHtml(currentContent)}</textarea>
-            <div class="flex gap-2 justify-end mt-1">
-                <button onclick="cancelEdit(${id})" class="text-xs text-gray-400 bg-transparent border-none cursor-pointer">取消</button>
-                <button onclick="saveEdit(${id})" class="text-xs text-blue-500 font-bold bg-transparent border-none cursor-pointer">儲存</button>
-            </div>
-        `;
-    };
-
-    window.cancelEdit = function(id) {
-        const msg = globalMsgMap.get(id);
-        if (!msg) return;
-        const p = document.getElementById(`content-${id}`);
-        if (p) p.innerHTML = escHtml(msg.content);
-    };
-    
-    window.saveEdit = function(id) {
-        const val = document.getElementById(`edit-ta-${id}`)?.value;
-        if (!val) return;
-        fetch(`/messages/${id}`, {
-            method: 'PATCH',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
-            },
-            body: JSON.stringify({ content: val }),
-        }).then(r => r.json()).then(d => {
-            if (d.success) {
-                const p = document.getElementById(`content-${id}`);
-                if (p) p.innerHTML = escHtml(val);
-                const msg = globalMsgMap.get(id);
-                if (msg) msg.content = val;
-            }
-        });
-    };
-
-    // ==========================================
-    // 4. UI 渲染與 HTML 生成工具
-    // ==========================================
     function buildRootHTML(msg) {
         const hasReplies = msg.children && msg.children.length > 0;
         const isOpen = expandedSet.has(msg.id);
@@ -439,6 +195,7 @@
             : `<div id="branch-${msg.id}">${childrenHtml}</div>`)
         : '';
 
+        // 加入 reply-branch class 以觸發 CSS 偽元素
         return `
         <div id="msg-${msg.id}" class="reply-branch relative pt-2.5" data-id="${msg.id}" data-parent-id="${msg.parent_id || ''}">
             <div class="flex items-start gap-2">
@@ -467,6 +224,7 @@
         </div>`;
     }
 
+    /* ... (其餘函式維持不變) ... */
     function buildReplyForm(msgId, rootId) {
         return `<div id="rform-${msgId}" class="reply-form-wrap items-center gap-2 mt-1.5 flex-wrap">
             <form action="/messages" method="POST" onsubmit="submitReply(event, ${rootId})" class="flex gap-2 w-full items-center">
@@ -485,14 +243,19 @@
         if (!parentId || parentId === rootId) return '';
         const parent = globalMsgMap.get(parentId);
         if (!parent) return '';
+
+        // 取前 20 個字作為預覽
         const preview = parent.content ? parent.content.slice(0, 20) + (parent.content.length > 20 ? '...' : '') : '';
         return `
-            <span class="text-xs text-gray-400">回覆</span> 
-            <span class="text-xs font-semibold text-blue-500 cursor-pointer hover:underline" onclick="scrollToMsg(${parentId})">@${escHtml(parent.user.name)}</span>
-            <span class="text-xs text-gray-300">·</span>
-            <span class="text-xs text-gray-400 cursor-pointer hover:text-blue-400 hover:underline italic max-w-32 truncate inline-block align-bottom" onclick="scrollToMsg(${parentId})" title="${escHtml(preview)}">「${escHtml(preview)}」</span>
-        `;
-    }
+        <span class="text-xs text-gray-400">回覆</span> 
+        <span class="text-xs font-semibold text-blue-500 cursor-pointer hover:underline" 
+              onclick="scrollToMsg(${parentId})">@${escHtml(parent.user.name)}</span>
+        <span class="text-xs text-gray-300">·</span>
+        <span class="text-xs text-gray-400 cursor-pointer hover:text-blue-400 hover:underline italic max-w-32 truncate inline-block align-bottom"
+              onclick="scrollToMsg(${parentId})"
+              title="${escHtml(preview)}">「${escHtml(preview)}」</span>
+    `;
+}
 
     function buildTimeLabel(createdAt) {
         if (!createdAt) return '';
@@ -506,17 +269,22 @@
     }
 
     function buildMediaHtml(msg) {
+        // 🚀 已完美對接你們的 AWS S3 儲存桶網址
         const s3BaseUrl = 'https://linkluv-media-bucket.s3.ap-east-2.amazonaws.com/';
         if (msg.media_type === 'image' && msg.image_path) {
+           // 💡 判斷路徑：如果是新資料走 S3 就補上 S3 網域，如果是舊資料本地暫存就走 /storage/ 
            const isS3 = msg.image_path.startsWith('images/') || !msg.image_path.startsWith('storage/');
            const imgUrl = isS3 ? `${s3BaseUrl}${msg.image_path}` : `/storage/${msg.image_path}`;
            return `<div class="msg-media"><img src="${imgUrl}" onclick="openLightbox('image','${imgUrl}')"></div>`;
         }
         if (msg.media_type === 'video' && msg.video_path) {
+            // 💡 影片經過壓縮後也上傳到 S3 (路徑為 videos/xxx.mp4)，同樣補上 S3 網域
             const isS3 = msg.video_path.startsWith('videos/') || !msg.video_path.startsWith('storage/');
             const videoUrl = isS3 ? `${s3BaseUrl}${msg.video_path}` : `/storage/${msg.video_path}`;
+            
             return `<div class="msg-media"><video controls preload="metadata"><source src="${videoUrl}" type="video/mp4">您的瀏覽器不支援影片播放。</video></div>`;
         }
+        
         return '';
     }
 
@@ -524,10 +292,6 @@
         if (!str) return '';
         return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
-
-    // ==========================================
-    // 5. 畫面控制 (收合、高亮、燈箱、縮圖)
-    // ==========================================
     window.toggleReplies = function(rootId, count) {
         const wrap = document.getElementById(`rwrap-${rootId}`);
         const btn = document.getElementById(`tbtn-${rootId}`);
@@ -547,7 +311,6 @@
             expandedSet.add(rootId);
         }
     };
-
     window.toggleBranch = function(msgId, btn) {
         const branch = document.getElementById(`branch-${msgId}`);
         if (!branch) return;
@@ -560,7 +323,6 @@
             btn.textContent = '▸ 展開';
         }
     };
-
     window.toggleReply = function(msgId, rootId) {
         if (rootId !== msgId) {
             const wrap = document.getElementById(`rwrap-${rootId}`);
@@ -576,7 +338,8 @@
         }
         const form = document.getElementById(`rform-${msgId}`);
         if (!form) return;
-        if (form.classList.contains('show')) {
+        const isShown = form.classList.contains('show');
+        if (isShown) {
             form.classList.remove('show');
         } else {
             form.classList.add('show');
@@ -585,7 +348,89 @@
             highlightMsg(msgId);
         }
     };
-
+    window.submitReply = function(e, rootId) {
+        e.preventDefault();
+        const form = e.target;
+        const contentInput = form.querySelector('input[name="content"]');
+        const fileInput = form.querySelector('input[type="file"]');
+        if (!contentInput.value.trim() && (!fileInput || !fileInput.files.length)) {
+            alert('請輸入回覆內容或上傳媒體');
+            return;
+        }
+        fetch("{{ route('messages.store') }}", {
+            method: 'POST',
+            body: new FormData(form),
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+            }
+        }).then(r => r.json()).then(() => {
+            expandedSet.add(rootId);
+            loadMessages(true);
+        });
+    };
+    window.submitPost = function(e) {
+        e.preventDefault();
+        const fi = e.target.querySelector('input[type="file"]');
+        if (fi?.files.length > 0 && fi.files[0].size > 50 * 1024 * 1024) {
+            alert('檔案太大，最大限制為 50MB');
+            fi.value = '';
+            return;
+        }
+        fetch("{{ route('messages.store') }}", {
+            method: 'POST',
+            body: new FormData(e.target),
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+            }
+        }).then(r => r.json()).then(d => {
+            if (d.success) {
+                loadMessages(true);
+                e.target.reset();
+            }
+        });
+    };
+    window.deleteMsg = function(id) {
+        if (!confirm('確定要刪除這則訊息嗎？')) return;
+        fetch(`/messages/${id}`, {
+            method: 'DELETE',
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+            }
+        }).then(r => r.json()).then(d => {
+            if (d.success) loadMessages();
+        });
+    };
+    window.editMsg = function(id) {
+        const p = document.getElementById(`content-${id}`);
+        if (!p) return;
+        const orig = p.innerText;
+        p.innerHTML =
+            `<textarea id="edit-ta-${id}" rows="2" class="w-full text-sm border border-gray-300 rounded-lg p-2 resize-none">${orig}</textarea><div class="flex gap-2 mt-1"><button onclick="saveEdit(${id})" class="text-xs bg-blue-500 text-white px-3 py-1 rounded-lg border-none cursor-pointer">儲存</button><button onclick="loadMessages()" class="text-xs bg-gray-200 text-gray-700 px-3 py-1 rounded-lg border-none cursor-pointer">取消</button></div>`;
+    };
+    window.saveEdit = function(id) {
+        const val = document.getElementById(`edit-ta-${id}`)?.value;
+        if (!val) return;
+        fetch(`/messages/${id}`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+            },
+            body: JSON.stringify({
+                content: val
+            }),
+        }).then(r => r.json()).then(d => {
+            if (d.success) loadMessages();
+        });
+    };
+    window.toggleLike = function(id) {
+        fetch(`/messages/${id}/like`, {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+            },
+        }).then(() => loadMessages());
+    };
     window.previewMedia = function(input, previewId) {
         const file = input.files[0];
         if (!file) return;
@@ -600,18 +445,15 @@
         el.innerHTML = file.type.startsWith('image/') ? `<img src="${url}" class="max-w-40 rounded-xl mt-1">` :
             `<video src="${url}" controls class="max-w-48 rounded-xl mt-1"></video>`;
     };
-
     window.openLightbox = function(type, src) {
         document.getElementById('lightbox-content').innerHTML = type === 'image' ? `<img src="${src}">` :
             `<video src="${src}" controls autoplay></video>`;
         document.getElementById('lightbox').classList.add('active');
     };
-
     window.closeLightbox = function() {
         document.getElementById('lightbox').classList.remove('active');
         document.getElementById('lightbox-content').innerHTML = '';
     };
-
     document.getElementById('lightbox').addEventListener('click', function(e) {
         if (e.target === this) closeLightbox();
     });
@@ -621,25 +463,85 @@
         const el = document.querySelector(`[data-id="${msgId}"]`);
         if (el) el.classList.add('msg-highlight');
     }
-
     window.scrollToMsg = function(msgId) {
+        // 找到目標訊息，展開它所在的 replies-wrapper
         const rootWrap = document.querySelector(`[data-id="${msgId}"]`)?.closest('.replies-wrapper');
         if (rootWrap && !rootWrap.classList.contains('expanded')) {
-            rootWrap.classList.add('expanded');
-        }
-        const el = document.querySelector(`[data-id="${msgId}"]`);
-        if (!el) return;
-        document.querySelectorAll('.msg-highlight').forEach(e => e.classList.remove('msg-highlight'));
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        const bubble = el.querySelector(':scope > .flex > .flex-1 > .msg-bubble, :scope > div > .flex-1 > .msg-bubble');
-        const target = bubble || el;
-        target.classList.add('msg-highlight');
-        setTimeout(() => target.classList.remove('msg-highlight'), 1500);
+        rootWrap.classList.add('expanded');
+    }
+
+    // 用 data-id 取代 id 避免重複選到
+    const el = document.querySelector(`[data-id="${msgId}"]`);
+    if (!el) return;
+    // 清除舊高亮
+    document.querySelectorAll('.msg-highlight').forEach(e => e.classList.remove('msg-highlight'));
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    // 只高亮 bubble，不影響子元素
+    const bubble = el.querySelector(':scope > .flex > .flex-1 > .msg-bubble, :scope > div > .flex-1 > .msg-bubble');
+    const target = bubble || el;
+    target.classList.add('msg-highlight');
+    setTimeout(() => target.classList.remove('msg-highlight'), 1500);
     };
 
+
     // ==========================================
-    // 6. 初始化載入牆面資料
+    // 請完整替換這一段，確保括號完美對齊
     // ==========================================
-    loadMessages(true);
+    let currentPage = 1;
+    let isLoading = false;
+    let hasMore = true;
+
+    function loadMessages(reset = false) {
+        if (isLoading || (!hasMore && !reset)) return;
+
+        if (reset) {
+            currentPage = 1;
+            hasMore = true;
+            document.getElementById('messages-list').innerHTML = '';
+            globalMsgMap = new Map();
+        }
+
+        isLoading = true;
+
+        fetch(`/api/messages?page=${currentPage}`)
+            .then(r => r.json())
+            .then(response => {
+                appendMessages(response.data);
+                hasMore = response.has_more;
+                currentPage = response.next_page;
+                isLoading = false;
+            }); // 這裡只有一個 }); 負責結束 fetch
+    } // 這裡的 } 負責結束整個 loadMessages 函式
+
+    function appendMessages(messages) {
+        const list = document.getElementById('messages-list');
+        messages.forEach(m => globalMsgMap.set(m.id, { ...m, children: [] }));
+
+        const roots = [];
+        messages.forEach(m => {
+            if (!m.parent_id) roots.push(globalMsgMap.get(m.id));
+            else {
+                const parent = globalMsgMap.get(m.parent_id);
+                if (parent) parent.children.push(globalMsgMap.get(m.id));
+                else roots.push(globalMsgMap.get(m.id));
+            }
+        });
+        
+        roots.forEach(root => list.insertAdjacentHTML('beforeend', buildRootHTML(root)));
+    }
+
+    // 滾動到底部自動載入
+    window.addEventListener('scroll', function() {
+        const scrollTop = window.scrollY;
+        const windowHeight = window.innerHeight;
+        const docHeight = document.documentElement.scrollHeight;
+
+        if (scrollTop + windowHeight >= docHeight - 300) {
+            loadMessages();
+        }
+    });        
+    
+    loadMessages();       
     </script>
 </x-app-layout>
