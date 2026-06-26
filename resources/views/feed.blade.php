@@ -101,6 +101,9 @@
         display: block;
         cursor: pointer;
     }
+    /* 讓 HTML 結構一目瞭然 */
+    main { background-color: red !important; }
+    main > div { background-color: blue !important; }
     </style>
 
     <script>
