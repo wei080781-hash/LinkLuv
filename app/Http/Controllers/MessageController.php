@@ -19,7 +19,9 @@ class MessageController extends Controller
         $messages = Cache::remember("messages_feed_page_{$page}", 60, function () use ($page, $perPage) {
              return Message::with(['user', 'parent.user'])
                  ->withCount('likes')
-                 ->orderBy('path', 'ASC') // 物化路徑排序，確保父在子前
+                 // ★ 關鍵排序改動：
+                 ->orderBy('thread_id', 'DESC') // 1. 讓最新發布的討論串（主留言）永遠排在最上面
+                 ->orderBy('path', 'ASC')       // 2. 在同一個討論串內部，依照物化路徑正序排，確保父在子前
                  ->paginate($perPage, ['*'], 'page', $page);
          });
 
