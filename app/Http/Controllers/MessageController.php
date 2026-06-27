@@ -128,7 +128,16 @@ class MessageController extends Controller
         for ($i = 1; $i <= 10; $i++) {
             Cache::forget("messages_feed_page_{$i}");
         } 
-        return response()->json(['success' => true]);
+
+        // 💡【本次新增的核心邏輯】
+        // 1. 預先載入 user 關聯，讓前端能順利讀取到頭像與名稱
+        $message->load(['user', 'parent.user']);
+        
+        // 2. 手動注入與 index() 方法相同的虛擬擴充屬性，防止前端 JavaScript 渲染時出錯
+        $message->likes_count = 0;
+        $message->is_liked = false;
+        $message->parent_user_name = $message->parent?->user?->name ?? null;
+        return response()->json(['success' => true, 'data' => $message]);
     }
 
     // 處理圖片優化與上傳至 S3
