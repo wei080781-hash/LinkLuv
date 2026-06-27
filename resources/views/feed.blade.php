@@ -405,7 +405,7 @@
                globalMsgMap.set(newMsg.id, newMsg);
 
                // ★ 核心改動：用 afterbegin 讓這則新 HTML 直接插在列表的最前面（第一項）
-               list.insertAdjacentHTML('afterbegin', buildRootHTML(newMsg));
+               list.insertAdjacentHTML('beforeend', buildRootHTML(newMsg));
 
                form.reset();
 
