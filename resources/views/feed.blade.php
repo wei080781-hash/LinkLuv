@@ -376,25 +376,50 @@
     };
     window.submitPost = function(e) {
         e.preventDefault();
-        const fi = e.target.querySelector('input[type="file"]');
+        const form = e.target;
+        const fi = form.querySelector('input[type="file"]');
+
+        // 1. 檔案大小檢查
         if (fi?.files.length > 0 && fi.files[0].size > 50 * 1024 * 1024) {
             alert('檔案太大，最大限制為 50MB');
             fi.value = '';
             return;
         }
+
         fetch("{{ route('messages.store') }}", {
             method: 'POST',
-            body: new FormData(e.target),
+            body: new FormData(form),
             headers: {
                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
             }
-        }).then(r => r.json()).then(d => {
-            if (d.success) {
-                loadMessages(true);
-                e.target.reset();
-            }
-        });
-    };
+        })
+        .then(r => r.json())
+        .then(d => {
+            // 2. 判斷後端有沒有傳回新訊息的資料 (d.data)
+           if (d.success && d.data) {
+               const newMsg = d.data;
+               const list = document.getElementById('messages-list');
+
+               // 初始化子留言結構，並塞入全域 Map 確保後續互動（如點讚、回覆）正常運作
+               newMsg.children = [];
+               globalMsgMap.set(newMsg.id, newMsg);
+
+               // ★ 核心改動：用 afterbegin 讓這則新 HTML 直接插在列表的最前面（第一項）
+               list.insertAdjacentHTML('afterbegin', buildRootHTML(newMsg));
+
+               form.reset();
+
+               // 如果你有做上傳預覽，發送成功後順便清空它
+               const preview = document.getElementById('fprev-main'); // 或者是你主發文框的預覽 ID
+               if (preview) preview.innerHTML = '';
+        } else {
+             // 防呆機制：如果後端目前還沒回傳 data，就先走原本的重載模式
+             loadMessages(true);
+             form.reset();
+        }
+    });
+};              
+
     window.deleteMsg = function(id) {
         if (!confirm('確定要刪除這則訊息嗎？')) return;
         fetch(`/messages/${id}`, {
