@@ -209,13 +209,6 @@
             : `<div id="branch-${msg.id}">${childrenHtml}</div>`)
         : '';
 
-        const replyingTo = buildReplyingToTag(msg.parent_id, rootId);
-        const timeLabel = buildTimeLabel(msg.created_at);
-        const childrenSection = hasChildren
-        ? (depth < 3
-            ? `<div id="branch-${msg.id}" class="ml-6 pl-4 border-l-2 border-gray-200 mt-1">${childrenHtml}</div>`
-            : `<div id="branch-${msg.id}">${childrenHtml}</div>`)
-        : '';
 
         // 💡 3. 子留言也做同樣的擁有者動態判斷
         const ownerButtons = (window.currentUserId && msg.user_id == window.currentUserId) ? `
