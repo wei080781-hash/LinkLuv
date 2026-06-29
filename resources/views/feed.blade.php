@@ -469,13 +469,61 @@
         });
     };
     window.toggleLike = function(id) {
+        // 1. 自動抓取這則訊息對應的按鈕與數字欄位
+        const btn = document.querySelector(`#msg-${id} .like-btn, [data-id="${id}"] .like-btn`);
+        const countEl = document.getElementById(`lcount-${id}`);
+        if (!btn || !countEl) return;
+
         fetch(`/messages/${id}/like`, {
             method: 'POST',
             headers: {
                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
             },
-        }).then(() => loadMessages());
-    };
+        })
+        .then(r => r.json())
+        .then(d => {
+          // 2. 如果後端有回傳最新的 likes_count 與 is_liked 狀態
+          if (d.likes_count !== undefined) {
+             countEl.textContent = d.likes_count;
+             if (d.is_liked) {
+                 btn.classList.add('text-pink-500', 'font-bold');
+                 btn.classList.remove('text-gray-400');
+            } else {
+                btn.classList.remove('text-pink-500', 'font-bold');
+                btn.classList.add('text-gray-400');
+            }
+            
+            // 同步更新全域 Map 緩存，防止未來意外觸發重繪時狀態倒退
+            if (globalMsgMap.has(id)) {
+                const msg = globalMsgMap.get(id);
+                msg.likes_count = d.likes_count;
+                msg.is_liked = d.is_liked;
+            }
+        } else {
+            // 備用防呆：如果後端只回傳 { success: true }，前端就自己做加減切換
+            const isLiked = btn.classList.contains('text-pink-500');
+            let count = parseInt(countEl.textContent) || 0;
+
+            if (isLiked) {
+              count = Math.max(0, count - 1);
+              btn.classList.remove('text-pink-500', 'font-bold');
+              btn.classList.add('text-gray-400');
+            } else {
+                count += 1;
+                btn.classList.add('text-pink-500', 'font-bold');
+                btn.classList.remove('text-gray-400');
+            }
+            countEl.textContent = count;
+            
+            if (globalMsgMap.has(id)) {
+               const msg = globalMsgMap.get(id);
+               msg.likes_count = count;
+               msg.is_liked = !isLiked;
+            }
+        }
+    })
+   .catch(err => console.error('點讚發送失敗:', err));
+};
     window.previewMedia = function(input, previewId) {
         const file = input.files[0];
         if (!file) return;
