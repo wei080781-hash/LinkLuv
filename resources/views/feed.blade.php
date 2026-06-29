@@ -107,6 +107,9 @@
     </style>
 
     <script>
+    // 💡 1. 放在這裡！將 Laravel 目前登入的 user ID 轉成 JavaScript 全域變數
+    window.currentUserId = {{ auth()->id() ?? 'null' }};    
+
     /* ... (資料處理邏輯保持不變) ... */
     const expandedSet = new Set();
     let globalMsgMap = new Map();
@@ -151,6 +154,12 @@
         ? msg.children.map(c => buildReplyHTML(c, msg.id, new Set(), 1)).join('') 
         : '';
 
+        // 💡 2. 動態判斷：如果是這則訊息的主人，才顯示按鈕
+        const ownerButtons = (window.currentUserId && msg.user_id == window.currentUserId) ? `
+            <button onclick="deleteMsg(${msg.id})" class="hover:text-red-500 bg-transparent border-none cursor-pointer  p-0 text-xs text-red-300">刪除</button>
+            <button onclick="editMsg(${msg.id})" class="hover:text-blue-600 bg-transparent border-none cursor-pointer p-0   text-xs text-gray-400">編輯</button>
+            ` : '';
+
         return `
         <div id="msg-${msg.id}" class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4" data-id="${msg.id}">
             <div class="flex items-start gap-2.5">
@@ -166,8 +175,7 @@
                     </div>
                     <div class="flex gap-3 text-xs text-gray-400 mt-1">
                         <button onclick="toggleReply(${msg.id}, ${msg.id})" class="hover:text-blue-600 bg-transparent border-none cursor-pointer p-0 text-xs text-gray-400">回覆</button>
-                        <button onclick="deleteMsg(${msg.id})" class="hover:text-red-500 bg-transparent border-none cursor-pointer p-0 text-xs text-red-300">刪除</button>
-                        <button onclick="editMsg(${msg.id})" class="hover:text-blue-600 bg-transparent border-none cursor-pointer p-0 text-xs text-gray-400">編輯</button>
+                        ${ownerButtons}
                         <button onclick="toggleLike(${msg.id})" class="like-btn flex items-center gap-1 bg-transparent border-none cursor-pointer p-0 text-xs ${msg.is_liked ? 'text-pink-500 font-bold' : 'text-gray-400'}">❤️ <span id="lcount-${msg.id}">${msg.likes_count || 0}</span></button>
                     </div>
                     ${buildReplyForm(msg.id, msg.id)}
@@ -201,6 +209,20 @@
             : `<div id="branch-${msg.id}">${childrenHtml}</div>`)
         : '';
 
+        const replyingTo = buildReplyingToTag(msg.parent_id, rootId);
+        const timeLabel = buildTimeLabel(msg.created_at);
+        const childrenSection = hasChildren
+        ? (depth < 3
+            ? `<div id="branch-${msg.id}" class="ml-6 pl-4 border-l-2 border-gray-200 mt-1">${childrenHtml}</div>`
+            : `<div id="branch-${msg.id}">${childrenHtml}</div>`)
+        : '';
+
+        // 💡 3. 子留言也做同樣的擁有者動態判斷
+        const ownerButtons = (window.currentUserId && msg.user_id == window.currentUserId) ? `
+            <button onclick="deleteMsg(${msg.id})" class="hover:text-red-500 bg-transparent border-none cursor-pointer p-0 text-xs text-red-300">刪除</button>
+            <button onclick="editMsg(${msg.id})" class="hover:text-blue-600 bg-transparent border-none cursor-pointer p-0 text-xs text-gray-400">編輯</button>
+        ` : '';
+
         // 加入 reply-branch class 以觸發 CSS 偽元素
         return `
         <div id="msg-${msg.id}" class="reply-branch relative pt-2.5" data-id="${msg.id}" data-parent-id="${msg.parent_id || ''}">
@@ -219,8 +241,7 @@
                     <div class="flex gap-3 text-xs text-gray-400 mt-1">
                         <button onclick="toggleReply(${msg.id}, ${rootId})" class="hover:text-blue-600 bg-transparent border-none cursor-pointer p-0 text-xs text-gray-400">回覆</button>
                         ${branchBtn}
-                        <button onclick="deleteMsg(${msg.id})" class="hover:text-red-500 bg-transparent border-none cursor-pointer p-0 text-xs text-red-300">刪除</button>
-                        <button onclick="editMsg(${msg.id})" class="hover:text-blue-600 bg-transparent border-none cursor-pointer p-0 text-xs text-gray-400">編輯</button>
+                        ${ownerButtons}
                         <button onclick="toggleLike(${msg.id})" class="like-btn flex items-center gap-1 bg-transparent border-none cursor-pointer p-0 text-xs ${msg.is_liked ? 'text-pink-500 font-bold' : 'text-gray-400'}">❤️ <span id="lcount-${msg.id}">${msg.likes_count || 0}</span></button>
                     </div>
                     ${buildReplyForm(msg.id, rootId)}
@@ -446,7 +467,7 @@
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
-            },
+            }
             body: JSON.stringify({
                 content: val
             }),
@@ -580,5 +601,5 @@ function appendMessages(messages) {
 }
 
 loadMessages();      
-    </script>
+</script>
 </x-app-layout>
