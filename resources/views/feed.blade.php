@@ -687,7 +687,9 @@
     if (typeof Echo !== 'undefined') {
     window.addEventListener('DOMContentLoaded', () => {
         Echo.channel('wall-channel')
-            .listen('.message.created', (e) => {
+            .listen('.message.created', (e) => { // ❗ 這裡改為 MessageSent
+                console.log('🎉 WebSocket 收到廣播事件:', e); // ❗ 檢查這行有沒有印出來
+                
                 const newMsg = e.message;
 
                 // 🟢 改成：如果畫面上已經有了，就跳過不重複渲染（避免 submitPost 渲染一次，WebSocket 又渲染一次）

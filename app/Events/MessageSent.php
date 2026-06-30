@@ -20,11 +20,9 @@ class MessageSent implements ShouldBroadcastNow // 💡 2. 這裡改成 implemen
         $this->message = $message->load('user');
     }
 
-    public function broadcastOn(): array
+    public function broadcastOn(): Channel
     {
-        return [
-            new Channel('wall-channel'),
-        ];
+        return new Channel('wall-channel'); // 移除陣列 []
     }
 
     public function broadcastAs(): string
