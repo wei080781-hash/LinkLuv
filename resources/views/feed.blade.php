@@ -633,7 +633,7 @@
     }
 
     loadMessages();
-    setupEcho(); // ❗ 加上這行，才會真正去執行連線！     
+         
 
     // =========================================================================
     // 🔥 完美整合：Laravel Reverb WebSocket 0.5秒極速異步無感渲染演算法
@@ -745,9 +745,33 @@ function setupEcho() {
                         rootEl.outerHTML = buildRootHTML(rootMsg);
                     }
                 }
-                
-            });
-    
+}        
 }
+
+// 2. 這是「啟動器」，放在函式外面，確保網頁載入後才執行
+window.addEventListener('load', () => {
+    // 建立輪詢機制，每 200ms 檢查一次 Echo 是否準備好
+    let retries = 0;
+    const maxRetries = 25; // 最多嘗試 5 秒 (25 * 200ms)
+
+    const checkEcho = setInterval(() => {
+        // 檢查方式：優先確認 window.Echo，若無則檢查全域 Echo
+        const echoInstance = window.Echo || (typeof Echo !== 'undefined' ? Echo : null);
+
+        if (echoInstance) {
+            // 確保掛載到 window 以供 setupEcho 使用
+            window.Echo = echoInstance;
+            console.log('🚀 Echo 已偵測到，準備執行 setupEcho...');
+            clearInterval(checkEcho);
+            setupEcho();
+        } else {
+            retries++;
+            if (retries >= maxRetries) {
+                console.error('❌ 超時：無法偵測到 Echo，請檢查 app.js 或 Reverb 設定。');
+                clearInterval(checkEcho);
+            }
+        }
+    }, 200);
+});
     </script>
 </x-app-layout>
