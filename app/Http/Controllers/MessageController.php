@@ -104,6 +104,10 @@ class MessageController extends Controller
             'depth'      => $depth,
         ]);
 
+        // 2. 加上這一行：把訊息丟進大聲公廣播出去！
+        // .toOthers() 很重要，它能確保「發文者自己」不會重複收到這則推播
+        broadcast(new \App\Events\MessageSent($message))->toOthers();
+
         // 更新物化路徑 (Materialized Path)
         $paddedId = str_pad($message->id, 10, '0', STR_PAD_LEFT);
         $path = $parentId ? (Message::findOrFail($parentId)->path . '.' . $paddedId) : $paddedId;

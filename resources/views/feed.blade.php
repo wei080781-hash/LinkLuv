@@ -110,7 +110,7 @@
     // 💡 1. 放在這裡！將 Laravel 目前登入的 user ID 轉成 JavaScript 全域變數
     window.currentUserId = {{ auth()->id() ?? 'null' }};    
 
-    /* ... (資料處理邏輯保持不變) ... */
+    /* ... (資料處理邏輯) ... */
     const expandedSet = new Set();
     let globalMsgMap = new Map();
 
@@ -141,9 +141,9 @@
 
         const avatarCol = hasReplies ?
             `<div class="flex flex-col items-center flex-shrink-0 w-10">
-                   <img src="${msg.user.profile_photo_url}" class="w-10 h-10 rounded-full object-cover flex-shrink-0">
-                   <div class="w-0.5 flex-1 bg-gray-300 mt-1 rounded-full min-h-3"></div>
-               </div>` :
+                    <img src="${msg.user.profile_photo_url}" class="w-10 h-10 rounded-full object-cover flex-shrink-0">
+                    <div class="w-0.5 flex-1 bg-gray-300 mt-1 rounded-full min-h-3"></div>
+                </div>` :
             `<img src="${msg.user.profile_photo_url}" class="w-10 h-10 rounded-full object-cover flex-shrink-0">`;
 
         const toggleBtn = hasReplies ?
@@ -156,7 +156,7 @@
 
         // 💡 2. 動態判斷：如果是這則訊息的主人，才顯示按鈕
         const ownerButtons = (window.currentUserId && msg.user_id == window.currentUserId) ? `
-            <button onclick="deleteMsg(${msg.id})" class="hover:text-red-500 bg-transparent border-none cursor-pointer  p-0 text-xs text-red-300">刪除</button>
+            <button onclick="deleteMsg(${msg.id})" class="hover:text-red-500 bg-transparent border-none cursor-pointer   p-0 text-xs text-red-300">刪除</button>
             <button onclick="editMsg(${msg.id})" class="hover:text-blue-600 bg-transparent border-none cursor-pointer p-0   text-xs text-gray-400">編輯</button>
             ` : '';
 
@@ -414,20 +414,20 @@
                const newMsg = d.data;
                const list = document.getElementById('messages-list');
 
-               // 初始化子留言結構，並塞入全域 Map 確保後續互動（如點讚、回覆）正常運作
+               // 初始化子留言結構，並塞入全域 Map 確保後續互動正常運作
                newMsg.children = [];
                globalMsgMap.set(newMsg.id, newMsg);
 
-               // ★ 核心改動：用 afterbegin 讓這則新 HTML 直接插在列表的最前面（第一項）
+               // ★ 用 afterbegin 讓這則新 HTML 直接插在列表的最前面（第一項）
                list.insertAdjacentHTML('afterbegin', buildRootHTML(newMsg));
 
                form.reset();
 
                // 如果你有做上傳預覽，發送成功後順便清空它
-               const preview = document.getElementById('fprev-main'); // 或者是你主發文框的預覽 ID
+               const preview = document.getElementById('fprev-main'); 
                if (preview) preview.innerHTML = '';
         } else {
-             // 防呆機制：如果後端目前還沒回傳 data，就先走原本的重載模式
+             // 防呆機制
              loadMessages(true);
              form.reset();
         }
@@ -469,7 +469,6 @@
         });
     };
     window.toggleLike = function(id) {
-        // 1. 自動抓取這則訊息對應的按鈕與數字欄位
         const btn = document.querySelector(`#msg-${id} .like-btn, [data-id="${id}"] .like-btn`);
         const countEl = document.getElementById(`lcount-${id}`);
         if (!btn || !countEl) return;
@@ -482,7 +481,6 @@
         })
         .then(r => r.json())
         .then(d => {
-          // 2. 如果後端有回傳最新的 likes_count 與 is_liked 狀態
           if (d.likes_count !== undefined) {
              countEl.textContent = d.likes_count;
              if (d.is_liked) {
@@ -493,14 +491,12 @@
                 btn.classList.add('text-gray-400');
             }
             
-            // 同步更新全域 Map 緩存，防止未來意外觸發重繪時狀態倒退
             if (globalMsgMap.has(id)) {
                 const msg = globalMsgMap.get(id);
                 msg.likes_count = d.likes_count;
                 msg.is_liked = d.is_liked;
             }
         } else {
-            // 備用防呆：如果後端只回傳 { success: true }，前端就自己做加減切換
             const isLiked = btn.classList.contains('text-pink-500');
             let count = parseInt(countEl.textContent) || 0;
 
@@ -557,90 +553,136 @@
         if (el) el.classList.add('msg-highlight');
     }
     window.scrollToMsg = function(msgId) {
-        // 找到目標訊息，展開它所在的 replies-wrapper
         const rootWrap = document.querySelector(`[data-id="${msgId}"]`)?.closest('.replies-wrapper');
         if (rootWrap && !rootWrap.classList.contains('expanded')) {
-        rootWrap.classList.add('expanded');
-    }
+            rootWrap.classList.add('expanded');
+        }
 
-    // 用 data-id 取代 id 避免重複選到
-    const el = document.querySelector(`[data-id="${msgId}"]`);
-    if (!el) return;
-    // 清除舊高亮
-    document.querySelectorAll('.msg-highlight').forEach(e => e.classList.remove('msg-highlight'));
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const el = document.querySelector(`[data-id="${msgId}"]`);
+        if (!el) return;
+        document.querySelectorAll('.msg-highlight').forEach(e => e.classList.remove('msg-highlight'));
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
-    // 只高亮 bubble，不影響子元素
-    const bubble = el.querySelector(':scope > .flex > .flex-1 > .msg-bubble, :scope > div > .flex-1 > .msg-bubble');
-    const target = bubble || el;
-    target.classList.add('msg-highlight');
-    setTimeout(() => target.classList.remove('msg-highlight'), 1500);
+        const bubble = el.querySelector(':scope > .flex > .flex-1 > .msg-bubble, :scope > div > .flex-1 > .msg-bubble');
+        const target = bubble || el;
+        target.classList.add('msg-highlight');
+        setTimeout(() => target.classList.remove('msg-highlight'), 1500);
     };
 
 
-// ==========================================
-// 請完整替換這一段，確保括號完美對齊
-// ==========================================
-let currentPage = 1;
-let isLoading = false;
-let hasMore = true;
+    let currentPage = 1;
+    let isLoading = false;
+    let hasMore = true;
 
-const sentinel = document.getElementById('scroll-sentinel');
-const loadingIndicator = document.getElementById('loading-indicator');
+    const sentinel = document.getElementById('scroll-sentinel');
+    const loadingIndicator = document.getElementById('loading-indicator');
 
-const observer = new IntersectionObserver((entries) => {
-    if (entries[0].isIntersecting && !isLoading && hasMore) {
-        loadingIndicator.classList.remove('hidden');
-        loadMessages();
+    const observer = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting && !isLoading && hasMore) {
+            loadingIndicator.classList.remove('hidden');
+            loadMessages();
+        }
+    }, { rootMargin: '0px 0px 100px 0px' });
+
+    observer.observe(sentinel);
+
+    function loadMessages(reset = false) {
+        if (isLoading || (!hasMore && !reset)) return;
+
+        if (reset) {
+            currentPage = 1;
+            hasMore = true;
+            document.getElementById('messages-list').innerHTML = '';
+            globalMsgMap = new Map();
+        }
+
+        isLoading = true;
+
+        fetch(`/api/messages?page=${currentPage}`)
+            .then(r => r.json())
+            .then(response => {
+                appendMessages(response.data);
+                hasMore = response.has_more;
+                currentPage = response.next_page;
+                isLoading = false;
+                loadingIndicator.classList.add('hidden');
+                if (!hasMore) {
+                    sentinel.innerHTML = '<span class="text-sm text-gray-300">已顯示全部訊息</span>';
+                    observer.disconnect();
+                }
+            });
     }
-}, { rootMargin: '0px 0px 100px 0px' });
 
-observer.observe(sentinel);
+    function appendMessages(messages) {
+        const list = document.getElementById('messages-list');
+        messages.forEach(m => globalMsgMap.set(m.id, { ...m, children: [] }));
 
-function loadMessages(reset = false) {
-    if (isLoading || (!hasMore && !reset)) return;
-
-    if (reset) {
-        currentPage = 1;
-        hasMore = true;
-        document.getElementById('messages-list').innerHTML = '';
-        globalMsgMap = new Map();
-    }
-
-    isLoading = true;
-
-    fetch(`/api/messages?page=${currentPage}`)
-        .then(r => r.json())
-        .then(response => {
-            appendMessages(response.data);
-            hasMore = response.has_more;
-            currentPage = response.next_page;
-            isLoading = false;
-            loadingIndicator.classList.add('hidden');
-            if (!hasMore) {
-                sentinel.innerHTML = '<span class="text-sm text-gray-300">已顯示全部訊息</span>';
-                observer.disconnect();
+        const roots = [];
+        messages.forEach(m => {
+            if (!m.parent_id) roots.push(globalMsgMap.get(m.id));
+            else {
+                const parent = globalMsgMap.get(m.parent_id);
+                if (parent) parent.children.push(globalMsgMap.get(m.id));
+                else roots.push(globalMsgMap.get(m.id));
             }
         });
-}
 
-function appendMessages(messages) {
-    const list = document.getElementById('messages-list');
-    messages.forEach(m => globalMsgMap.set(m.id, { ...m, children: [] }));
+        roots.forEach(root => list.insertAdjacentHTML('beforeend', buildRootHTML(root)));
+    }
 
-    const roots = [];
-    messages.forEach(m => {
-        if (!m.parent_id) roots.push(globalMsgMap.get(m.id));
-        else {
-            const parent = globalMsgMap.get(m.parent_id);
-            if (parent) parent.children.push(globalMsgMap.get(m.id));
-            else roots.push(globalMsgMap.get(m.id));
-        }
-    });
+    loadMessages();       
 
-    roots.forEach(root => list.insertAdjacentHTML('beforeend', buildRootHTML(root)));
-}
+    // =========================================================================
+    // 🔥 完美整合：Laravel Reverb WebSocket 0.5秒極速異步無感渲染演算法
+    // =========================================================================
+    if (typeof Echo !== 'undefined') {
+        Echo.channel('wall-channel')
+            .listen('.message.created', (e) => {
+                const newMsg = e.message;
 
-loadMessages();      
-</script>
+                // 1. 去重防呆：如果是自己發的，或是已經存在的訊息，直接無視
+                if (globalMsgMap.has(newMsg.id)) return;
+
+                // 2. 初始化子結構，並登入全域快取樹中
+                newMsg.children = [];
+                globalMsgMap.set(newMsg.id, newMsg);
+
+                if (!newMsg.parent_id) {
+                    // 💡 【情況 A：有人發了全新主貼文】
+                    // 直接將新貼文插到生活牆最頂端，完全無感即時
+                    const list = document.getElementById('messages-list');
+                    if (list) {
+                        list.insertAdjacentHTML('afterbegin', buildRootHTML(newMsg));
+                    }
+                } else {
+                    // 💡 【情況 B：有人回覆了某條貼文】
+                    // 骨架回溯演算法：沿著 parent_id 一路向上找出最頂層的根貼文 ID
+                    let rootId = newMsg.parent_id;
+                    let parentMsg = globalMsgMap.get(newMsg.parent_id);
+                    
+                    while (parentMsg && parentMsg.parent_id) {
+                        rootId = parentMsg.parent_id;
+                        parentMsg = globalMsgMap.get(parentMsg.parent_id);
+                    }
+
+                    // 將新訊息追加進父節點物件的 children 陣列中，保持記憶體資料鏈完整
+                    const trueParent = globalMsgMap.get(newMsg.parent_id);
+                    if (trueParent) {
+                        if (!trueParent.children) trueParent.children = [];
+                        trueParent.children.push(newMsg);
+                    }
+
+                    // 局部更新：如果這個根貼文目前在使用者畫面上，我們只重繪這張貼文卡片！
+                    // 這能保證留言樹、回覆計數器「啪」一聲瞬間精準更新，且不會害其他使用者的網頁彈跳！
+                    const rootEl = document.getElementById(`msg-${rootId}`);
+                    const rootMsg = globalMsgMap.get(rootId);
+                    if (rootEl && rootMsg) {
+                        // 強制維持展開狀態，讓使用者立刻看見新留言跳出來
+                        expandedSet.add(rootId);
+                        rootEl.outerHTML = buildRootHTML(rootMsg);
+                    }
+                }
+            });
+    }
+    </script>
 </x-app-layout>
