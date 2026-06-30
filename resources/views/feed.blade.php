@@ -688,9 +688,23 @@
     //         });
     // }
 function setupEcho() {
-    if (typeof Echo === 'undefined') return;
-
+    if (typeof Echo === 'undefined') {
+       console.error('❌ Echo 未定義，請檢查 app.js 是否正確載入')
+       return;
+    }
+    
+    // 1. 萬用監聽：這會抓出所有經過這個 socket 的事件，不管頻道名對不對
+    window.Echo.connector.pusher.bind_global((event, data) => {
+       console.log('📡 [偵測到事件]:', event, '資料:', data);
+    });    
+        // 2. 你的目標頻道監聽
         Echo.channel('wall-channel')
+            .subscribed(() => {
+                console.log('✅ 已成功訂閱 wall-channel 頻道');
+            })
+            .error((error) => {
+                console.error('❌ 頻道訂閱失敗:', error);
+            })
             .listen('.message.created', (e) => { // ❗ 這裡改為 MessageSent
                 console.log('🎉 WebSocket 收到廣播事件:', e); // ❗ 檢查這行有沒有印出來
 
@@ -709,6 +723,7 @@ function setupEcho() {
                         list.insertAdjacentHTML('afterbegin', buildRootHTML(newMsg));
                     }
                 } else {
+                    // 你的回溯邏輯...
                     let rootId = newMsg.parent_id;
                     let parentMsg = globalMsgMap.get(newMsg.parent_id);
                     
@@ -731,13 +746,6 @@ function setupEcho() {
                     }
                 }
                 
-            })
-            .subscribed(() => {
-                console.log('✅ 已成功訂閱 wall-channel 頻道');
-            })
-            // ❗ 建議加一個 .error 監聽，如果 AWS 有防火牆擋住，這裡會跳出錯誤
-            .error((error) => {
-                console.error('❌ 頻道訂閱失敗:', error);
             });
     
 }
