@@ -107,6 +107,8 @@
     </style>
 
     <script>
+    window.globalMsgMap = new Map();
+    window.expandedSet = new Set();    
     // 💡 1. 放在這裡！將 Laravel 目前登入的 user ID 轉成 JavaScript 全域變數
     window.currentUserId = {{ auth()->id() ?? 'null' }};    
 
@@ -687,7 +689,7 @@
     // }
 function setupEcho() {
     if (typeof Echo === 'undefined') return;
-    
+
         Echo.channel('wall-channel')
             .listen('.message.created', (e) => { // ❗ 這裡改為 MessageSent
                 console.log('🎉 WebSocket 收到廣播事件:', e); // ❗ 檢查這行有沒有印出來
