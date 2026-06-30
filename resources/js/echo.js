@@ -12,3 +12,12 @@ window.Echo = new Echo({
     forceTLS: false,
     enabledTransports: ['ws', 'wss'],
 });
+
+// ❗ 加入這段，強制確認 Echo 是否在運作
+window.Echo.connector.pusher.connection.bind('connected', () => {
+    console.log('✅ WebSocket 連線已建立！');
+});
+
+window.Echo.connector.pusher.connection.bind('error', (err) => {
+    console.error('❌ WebSocket 連線錯誤:', err);
+});

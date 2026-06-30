@@ -630,7 +630,8 @@
         roots.forEach(root => list.insertAdjacentHTML('beforeend', buildRootHTML(root)));
     }
 
-    loadMessages();       
+    loadMessages();
+    setupEcho(); // ❗ 加上這行，才會真正去執行連線！     
 
     // =========================================================================
     // 🔥 完美整合：Laravel Reverb WebSocket 0.5秒極速異步無感渲染演算法
@@ -684,12 +685,13 @@
     //             }
     //         });
     // }
-    if (typeof Echo !== 'undefined') {
-    window.addEventListener('DOMContentLoaded', () => {
+function setupEcho() {
+    if (typeof Echo === 'undefined') return;
+    
         Echo.channel('wall-channel')
             .listen('.message.created', (e) => { // ❗ 這裡改為 MessageSent
                 console.log('🎉 WebSocket 收到廣播事件:', e); // ❗ 檢查這行有沒有印出來
-                
+
                 const newMsg = e.message;
 
                 // 🟢 改成：如果畫面上已經有了，就跳過不重複渲染（避免 submitPost 渲染一次，WebSocket 又渲染一次）
@@ -726,8 +728,16 @@
                         rootEl.outerHTML = buildRootHTML(rootMsg);
                     }
                 }
+                
+            })
+            .subscribed(() => {
+                console.log('✅ 已成功訂閱 wall-channel 頻道');
+            })
+            // ❗ 建議加一個 .error 監聽，如果 AWS 有防火牆擋住，這裡會跳出錯誤
+            .error((error) => {
+                console.error('❌ 頻道訂閱失敗:', error);
             });
-    });
+    
 }
     </script>
 </x-app-layout>
