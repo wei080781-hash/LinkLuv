@@ -635,28 +635,74 @@
     // =========================================================================
     // 🔥 完美整合：Laravel Reverb WebSocket 0.5秒極速異步無感渲染演算法
     // =========================================================================
+    // if (typeof Echo !== 'undefined') {
+    //     Echo.channel('wall-channel')
+    //         .listen('.message.created', (e) => {
+    //             const newMsg = e.message;
+
+    //             // 1. 去重防呆：如果是自己發的，或是已經存在的訊息，直接無視
+    //             if (globalMsgMap.has(newMsg.id)) return;
+
+    //             // 2. 初始化子結構，並登入全域快取樹中
+    //             newMsg.children = [];
+    //             globalMsgMap.set(newMsg.id, newMsg);
+
+    //             if (!newMsg.parent_id) {
+    //                 // 💡 【情況 A：有人發了全新主貼文】
+    //                 // 直接將新貼文插到生活牆最頂端，完全無感即時
+    //                 const list = document.getElementById('messages-list');
+    //                 if (list) {
+    //                     list.insertAdjacentHTML('afterbegin', buildRootHTML(newMsg));
+    //                 }
+    //             } else {
+    //                 // 💡 【情況 B：有人回覆了某條貼文】
+    //                 // 骨架回溯演算法：沿著 parent_id 一路向上找出最頂層的根貼文 ID
+    //                 let rootId = newMsg.parent_id;
+    //                 let parentMsg = globalMsgMap.get(newMsg.parent_id);
+                    
+    //                 while (parentMsg && parentMsg.parent_id) {
+    //                     rootId = parentMsg.parent_id;
+    //                     parentMsg = globalMsgMap.get(parentMsg.parent_id);
+    //                 }
+
+    //                 // 將新訊息追加進父節點物件的 children 陣列中，保持記憶體資料鏈完整
+    //                 const trueParent = globalMsgMap.get(newMsg.parent_id);
+    //                 if (trueParent) {
+    //                     if (!trueParent.children) trueParent.children = [];
+    //                     trueParent.children.push(newMsg);
+    //                 }
+
+    //                 // 局部更新：如果這個根貼文目前在使用者畫面上，我們只重繪這張貼文卡片！
+    //                 // 這能保證留言樹、回覆計數器「啪」一聲瞬間精準更新，且不會害其他使用者的網頁彈跳！
+    //                 const rootEl = document.getElementById(`msg-${rootId}`);
+    //                 const rootMsg = globalMsgMap.get(rootId);
+    //                 if (rootEl && rootMsg) {
+    //                     // 強制維持展開狀態，讓使用者立刻看見新留言跳出來
+    //                     expandedSet.add(rootId);
+    //                     rootEl.outerHTML = buildRootHTML(rootMsg);
+    //                 }
+    //             }
+    //         });
+    // }
     if (typeof Echo !== 'undefined') {
+    window.addEventListener('DOMContentLoaded', () => {
         Echo.channel('wall-channel')
             .listen('.message.created', (e) => {
                 const newMsg = e.message;
 
-                // 1. 去重防呆：如果是自己發的，或是已經存在的訊息，直接無視
+                // 🟢 改成：如果畫面上已經有了，就跳過不重複渲染（避免 submitPost 渲染一次，WebSocket 又渲染一次）
                 if (globalMsgMap.has(newMsg.id)) return;
 
-                // 2. 初始化子結構，並登入全域快取樹中
                 newMsg.children = [];
                 globalMsgMap.set(newMsg.id, newMsg);
 
                 if (!newMsg.parent_id) {
-                    // 💡 【情況 A：有人發了全新主貼文】
-                    // 直接將新貼文插到生活牆最頂端，完全無感即時
                     const list = document.getElementById('messages-list');
                     if (list) {
+                        // 🔥 關鍵核心：別人發布全新貼文時，也強制啪一聲插到最前面第一項！
                         list.insertAdjacentHTML('afterbegin', buildRootHTML(newMsg));
                     }
                 } else {
-                    // 💡 【情況 B：有人回覆了某條貼文】
-                    // 骨架回溯演算法：沿著 parent_id 一路向上找出最頂層的根貼文 ID
                     let rootId = newMsg.parent_id;
                     let parentMsg = globalMsgMap.get(newMsg.parent_id);
                     
@@ -665,24 +711,21 @@
                         parentMsg = globalMsgMap.get(parentMsg.parent_id);
                     }
 
-                    // 將新訊息追加進父節點物件的 children 陣列中，保持記憶體資料鏈完整
                     const trueParent = globalMsgMap.get(newMsg.parent_id);
                     if (trueParent) {
                         if (!trueParent.children) trueParent.children = [];
                         trueParent.children.push(newMsg);
                     }
 
-                    // 局部更新：如果這個根貼文目前在使用者畫面上，我們只重繪這張貼文卡片！
-                    // 這能保證留言樹、回覆計數器「啪」一聲瞬間精準更新，且不會害其他使用者的網頁彈跳！
                     const rootEl = document.getElementById(`msg-${rootId}`);
                     const rootMsg = globalMsgMap.get(rootId);
                     if (rootEl && rootMsg) {
-                        // 強制維持展開狀態，讓使用者立刻看見新留言跳出來
                         expandedSet.add(rootId);
                         rootEl.outerHTML = buildRootHTML(rootMsg);
                     }
                 }
             });
-    }
+    });
+}
     </script>
 </x-app-layout>
