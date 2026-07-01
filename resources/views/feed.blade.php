@@ -159,6 +159,9 @@
     //    WebSocket、submitPost、submitReply 全部走這裡
     // =========================================================
     window.handleNewMessage = function(newMsg) {
+
+        console.log("parent_id =", newMsg.parent_id);
+
         // 去重防呆：已存在就跳過
         if (window.globalMsgMap.has(newMsg.id)) return;
 
@@ -169,6 +172,9 @@
             // 全新貼文：插到最頂端
             const list = document.getElementById('messages-list');
             if (list) list.insertAdjacentHTML('afterbegin', buildRootHTML(newMsg));
+                console.log("===== 插入後 =====");
+                console.log(document.getElementById(`msg-${newMsg.id}`));
+                console.log(document.getElementById('messages-list').innerHTML);
         } else {
             // 回覆：找到根貼文並局部重繪
             const rootId = findRootId(newMsg.parent_id);
