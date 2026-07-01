@@ -158,7 +158,16 @@
     // 4. 統一處理新訊息入口
     //    WebSocket、submitPost、submitReply 全部走這裡
     // =========================================================
+    
     window.handleNewMessage = function(newMsg) {
+
+        console.log(typeof newMsg.id);
+        console.log(typeof newMsg.parent_id);
+        console.log(
+        [...window.globalMsgMap.keys()]
+            .slice(0,10)
+            .map(k => [k, typeof k])
+        );
 
         console.log("parent_id =", newMsg.parent_id);
 
