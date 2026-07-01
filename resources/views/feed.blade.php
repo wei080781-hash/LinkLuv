@@ -147,48 +147,54 @@
         }, 200);
     }
 
+    // setupEcho 精簡化：統一走 handleNewMessage
     function setupEcho() {
         window.Echo.channel('wall-channel')
             .listen('.message.created', (e) => {
-                const newMsg = e.message;
-
-                // 去重防呆：已存在就跳過
-                if (window.globalMsgMap.has(newMsg.id)) return;
-
-                newMsg.children = [];
-                window.globalMsgMap.set(newMsg.id, newMsg);
-
-                if (!newMsg.parent_id) {
-                    // 全新貼文：插到最頂端
-                    const list = document.getElementById('messages-list');
-                    if (list) list.insertAdjacentHTML('afterbegin', buildRootHTML(newMsg));
-                } else {
-                    // 回覆：找到根貼文並局部重繪
-                    const rootId = findRootId(newMsg.parent_id);
-                    const trueParent = window.globalMsgMap.get(newMsg.parent_id);
-                    if (trueParent) {
-                        if (!trueParent.children) trueParent.children = [];
-                        trueParent.children.push(newMsg);
-                    }
-                    // 強制展開，讓使用者立刻看到新回覆
-                    window.expandedSet.add(rootId);
-                    const rootEl = document.getElementById(`msg-${rootId}`);
-                    const rootMsg = window.globalMsgMap.get(rootId);
-                    if (rootEl && rootMsg) {
-                        // 防護：若使用者正在該卡片內打字，跳過重繪避免焦點丟失
-                        const activeInput = rootEl.querySelector('input[name="content"], textarea');
-                        const isFocused = activeInput && (document.activeElement === activeInput);
-                        const hasTyped = activeInput && activeInput.value.trim() !== '';
-                        if (!isFocused && !hasTyped) {
-                            rootEl.outerHTML = buildRootHTML(rootMsg);
-                        }
-                    }
-                }
+                handleNewMessage(e.message);
             });
     }
 
     // =========================================================
-    // 4. 輔助函式：回溯找出根貼文 ID
+    // 4. 統一處理新訊息入口
+    //    WebSocket、submitPost、submitReply 全部走這裡
+    // =========================================================
+    window.handleNewMessage = function(newMsg) {
+        // 去重防呆：已存在就跳過
+        if (window.globalMsgMap.has(newMsg.id)) return;
+
+        newMsg.children = [];
+        window.globalMsgMap.set(newMsg.id, newMsg);
+
+        if (!newMsg.parent_id) {
+            // 全新貼文：插到最頂端
+            const list = document.getElementById('messages-list');
+            if (list) list.insertAdjacentHTML('afterbegin', buildRootHTML(newMsg));
+        } else {
+            // 回覆：找到根貼文並局部重繪
+            const rootId = findRootId(newMsg.parent_id);
+            const trueParent = window.globalMsgMap.get(newMsg.parent_id);
+            if (trueParent) {
+                if (!trueParent.children) trueParent.children = [];
+                trueParent.children.push(newMsg);
+            }
+            window.expandedSet.add(rootId);
+            const rootEl = document.getElementById(`msg-${rootId}`);
+            const rootMsg = window.globalMsgMap.get(rootId);
+            if (rootEl && rootMsg) {
+                // 防護：若使用者正在該卡片內打字，跳過重繪避免焦點丟失
+                const activeInput = rootEl.querySelector('input[name="content"], textarea');
+                const isFocused = activeInput && (document.activeElement === activeInput);
+                const hasTyped = activeInput && activeInput.value.trim() !== '';
+                if (!isFocused && !hasTyped) {
+                    rootEl.outerHTML = buildRootHTML(rootMsg);
+                }
+            }
+        }
+    };
+
+    // =========================================================
+    // 5. 輔助函式：回溯找出根貼文 ID
     // =========================================================
     function findRootId(parentId) {
         let current = window.globalMsgMap.get(parentId);
@@ -199,7 +205,7 @@
     }
 
     // =========================================================
-    // 5. 載入訊息核心（修正：補回 parent-child 建立邏輯）
+    // 6. 載入訊息核心
     // =========================================================
     function loadMessages(reset = false) {
         if (isLoading || (!hasMore && !reset)) return;
@@ -229,39 +235,47 @@
             });
     }
 
+    // 遞迴將所有訊息（含子留言）都註冊進全域 Map
+    function indexToMap(msg) {
+        if (!window.globalMsgMap.has(msg.id)) {
+            window.globalMsgMap.set(msg.id, { ...msg, children: [] });
+        } else {
+            // 已存在：更新內容但保留現有 children
+            const existing = window.globalMsgMap.get(msg.id);
+            window.globalMsgMap.set(msg.id, { ...msg, children: existing.children });
+        }
+        // 遞迴處理後端夾帶的子留言
+        if (msg.children && msg.children.length > 0) {
+            msg.children.forEach(child => indexToMap(child));
+        }
+    }
+
     function appendMessages(messages) {
         const list = document.getElementById('messages-list');
 
-        // Step 1: 塞進 Map（防禦性寫法：已存在的訊息保留 children，不清空）
-        messages.forEach(m => {
-            if (!window.globalMsgMap.has(m.id)) {
-                // 全新訊息：正常建立
-                window.globalMsgMap.set(m.id, { ...m, children: [] });
-            } else {
-                // 已存在（分頁重疊）：更新內容，但明確保留現有 children
-                const existing = window.globalMsgMap.get(m.id);
-                window.globalMsgMap.set(m.id, { ...m, children: existing.children });
-            }
-        });
+        // Step 1: 遞迴將所有訊息（含子留言）都扁平化註冊進 Map
+        messages.forEach(m => indexToMap(m));
 
-        // Step 2: 建立 parent-child 關係（這步驟不能省）
+        // Step 2: 只掃當前這批資料建立 parent-child 關係（不掃全量 Map，避免效能問題）
         messages.forEach(m => {
             if (m.parent_id) {
                 const parent = window.globalMsgMap.get(m.parent_id);
-                if (parent) parent.children.push(window.globalMsgMap.get(m.id));
+                if (parent && !parent.children.some(c => c.id === m.id)) {
+                    parent.children.push(window.globalMsgMap.get(m.id));
+                }
             }
         });
 
-        // Step 3: 只渲染根層貼文（子留言由 buildRootHTML 遞迴處理）
+        // Step 3: 只渲染根層貼文，避免重複插入已存在的節點
         messages.forEach(m => {
-            if (!m.parent_id) {
+            if (!m.parent_id && !document.getElementById(`msg-${m.id}`)) {
                 list.insertAdjacentHTML('beforeend', buildRootHTML(window.globalMsgMap.get(m.id)));
             }
         });
     }
 
     // =========================================================
-    // 6. HTML 建構函式
+    // 7. HTML 建構函式
     // =========================================================
     function buildRootHTML(msg) {
         const hasReplies = msg.children && msg.children.length > 0;
@@ -373,7 +387,7 @@
     }
 
     // =========================================================
-    // 7. 小型 Helper 函式
+    // 8. 小型 Helper 函式
     // =========================================================
     function buildReplyForm(msgId, rootId) {
         return `<div id="rform-${msgId}" class="reply-form-wrap items-center gap-2 mt-1.5 flex-wrap">
@@ -435,7 +449,7 @@
     }
 
     // =========================================================
-    // 8. 互動事件函式
+    // 9. 互動事件函式
     // =========================================================
     window.toggleReplies = function(rootId, count) {
         const wrap = document.getElementById(`rwrap-${rootId}`);
@@ -496,6 +510,7 @@
         }
     };
 
+    // submitReply：改用 handleNewMessage，拿掉 loadMessages(true)
     window.submitReply = function(e, rootId) {
         e.preventDefault();
         const form = e.target;
@@ -509,12 +524,20 @@
             method: 'POST',
             body: new FormData(form),
             headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }
-        }).then(r => r.json()).then(() => {
-            window.expandedSet.add(rootId);
-            loadMessages(true);
+        }).then(r => r.json()).then(d => {
+            if (d.success && d.data) {
+                handleNewMessage(d.data);
+                form.reset();
+                const msgId = form.querySelector('input[name="parent_id"]')?.value;
+                if (msgId) {
+                    const preview = document.getElementById(`fprev-${msgId}`);
+                    if (preview) preview.innerHTML = '';
+                }
+            }
         });
     };
 
+    // submitPost：改用 handleNewMessage
     window.submitPost = function(e) {
         e.preventDefault();
         const form = e.target;
@@ -532,16 +555,7 @@
         .then(r => r.json())
         .then(d => {
             if (d.success && d.data) {
-                const newMsg = d.data;
-
-                // 防護：WebSocket 可能已經先渲染過了，不重複插入
-                if (!window.globalMsgMap.has(newMsg.id)) {
-                    newMsg.children = [];
-                    window.globalMsgMap.set(newMsg.id, newMsg);
-                    const list = document.getElementById('messages-list');
-                    list.insertAdjacentHTML('afterbegin', buildRootHTML(newMsg));
-                }
-
+                handleNewMessage(d.data);
                 form.reset();
                 const preview = document.getElementById('fprev-main');
                 if (preview) preview.innerHTML = '';
