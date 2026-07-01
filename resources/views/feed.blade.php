@@ -537,6 +537,7 @@
         })
         .then(r => r.json())
         .then(d => {
+            console.log("收到資料：", d);
             if (d.success && d.data) {
                 // 1. 先清空表單，釋放 hasTyped 狀態
                 form.reset();
@@ -544,8 +545,11 @@
                     const preview = document.getElementById(`fprev-${msgId}`);
                     if (preview) preview.innerHTML = '';
                 }
+                console.log("開始更新畫面");
                 // 2. 再安全觸發 DOM 重繪
                 handleNewMessage(d.data);
+
+                console.log("更新完成");
             }
         })
         .catch(err => {
