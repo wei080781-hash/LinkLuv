@@ -160,6 +160,7 @@
     // =========================================================
     
     window.handleNewMessage = function(newMsg) {
+        console.log("★★★★ 我改過 handleNewMessage 了 ★★★★");
         newMsg.id = Number(newMsg.id);
         newMsg.parent_id =
         newMsg.parent_id == null
