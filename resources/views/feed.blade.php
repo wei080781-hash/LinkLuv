@@ -175,17 +175,26 @@
             const trueParent = window.globalMsgMap.get(newMsg.parent_id);
             if (trueParent) {
                 if (!trueParent.children) trueParent.children = [];
-                trueParent.children.push(newMsg);
+                // 檢查是否重複，不重複才塞入
+                if (!trueParent.children.some(c => c.id === newMsg.id)) {    
+                    trueParent.children.push(newMsg);
+                }
             }
+            
+            // 強制展開該根貼文的檢視狀態
             window.expandedSet.add(rootId);
+
             const rootEl = document.getElementById(`msg-${rootId}`);
             const rootMsg = window.globalMsgMap.get(rootId);
+
             if (rootEl && rootMsg) {
                 // 防護：若使用者正在該卡片內打字，跳過重繪避免焦點丟失
                 const activeInput = rootEl.querySelector('input[name="content"], textarea');
                 const isFocused = activeInput && (document.activeElement === activeInput);
                 const hasTyped = activeInput && activeInput.value.trim() !== '';
+
                 if (!isFocused && !hasTyped) {
+                    // 核心重繪：此時記憶體結構已正確，深層留言將會完美渲染
                     rootEl.outerHTML = buildRootHTML(rootMsg);
                 }
             }
