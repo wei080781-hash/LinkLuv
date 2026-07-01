@@ -147,7 +147,6 @@
         }, 200);
     }
 
-    // setupEcho 精簡化：統一走 handleNewMessage
     function setupEcho() {
         window.Echo.channel('wall-channel')
             .listen('.message.created', (e) => {
@@ -235,16 +234,13 @@
             });
     }
 
-    // 遞迴將所有訊息（含子留言）都註冊進全域 Map
     function indexToMap(msg) {
         if (!window.globalMsgMap.has(msg.id)) {
             window.globalMsgMap.set(msg.id, { ...msg, children: [] });
         } else {
-            // 已存在：更新內容但保留現有 children
             const existing = window.globalMsgMap.get(msg.id);
             window.globalMsgMap.set(msg.id, { ...msg, children: existing.children });
         }
-        // 遞迴處理後端夾帶的子留言
         if (msg.children && msg.children.length > 0) {
             msg.children.forEach(child => indexToMap(child));
         }
@@ -253,10 +249,8 @@
     function appendMessages(messages) {
         const list = document.getElementById('messages-list');
 
-        // Step 1: 遞迴將所有訊息（含子留言）都扁平化註冊進 Map
         messages.forEach(m => indexToMap(m));
 
-        // Step 2: 只掃當前這批資料建立 parent-child 關係（不掃全量 Map，避免效能問題）
         messages.forEach(m => {
             if (m.parent_id) {
                 const parent = window.globalMsgMap.get(m.parent_id);
@@ -266,7 +260,6 @@
             }
         });
 
-        // Step 3: 只渲染根層貼文，避免重複插入已存在的節點
         messages.forEach(m => {
             if (!m.parent_id && !document.getElementById(`msg-${m.id}`)) {
                 list.insertAdjacentHTML('beforeend', buildRootHTML(window.globalMsgMap.get(m.id)));
@@ -510,43 +503,24 @@
         }
     };
 
-    // submitReply：改用 handleNewMessage，拿掉 loadMessages(true)
+    // ✅ 完美修正後的 submitReply 函式
     window.submitReply = function(e, rootId) {
         e.preventDefault();
         const form = e.target;
         const contentInput = form.querySelector('input[name="content"]');
         const fileInput = form.querySelector('input[type="file"]');
+        const submitBtn = form.querySelector('button[type="submit"]');
+
         if (!contentInput.value.trim() && (!fileInput || !fileInput.files.length)) {
             alert('請輸入回覆內容或上傳媒體');
             return;
         }
-        fetch("{{ route('messages.store') }}", {
-            method: 'POST',
-            body: new FormData(form),
-            headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }
-        }).then(r => r.json()).then(d => {
-            if (d.success && d.data) {
-                handleNewMessage(d.data);
-                form.reset();
-                const msgId = form.querySelector('input[name="parent_id"]')?.value;
-                if (msgId) {
-                    const preview = document.getElementById(`fprev-${msgId}`);
-                    if (preview) preview.innerHTML = '';
-                }
-            }
-        });
-    };
 
-    // submitPost：改用 handleNewMessage
-    window.submitPost = function(e) {
-        e.preventDefault();
-        const form = e.target;
-        const fi = form.querySelector('input[type="file"]');
-        if (fi?.files.length > 0 && fi.files[0].size > 50 * 1024 * 1024) {
-            alert('檔案太大，最大限制為 50MB');
-            fi.value = '';
-            return;
-        }
+        // 防重複點擊鎖定
+        if (submitBtn) submitBtn.disabled = true;
+
+        const msgId = form.querySelector('input[name="parent_id"]')?.value;
+
         fetch("{{ route('messages.store') }}", {
             method: 'POST',
             body: new FormData(form),
@@ -555,14 +529,59 @@
         .then(r => r.json())
         .then(d => {
             if (d.success && d.data) {
+                // 1. 先清空表單，釋放 hasTyped 狀態
+                form.reset();
+                if (msgId) {
+                    const preview = document.getElementById(`fprev-${msgId}`);
+                    if (preview) preview.innerHTML = '';
+                }
+                // 2. 再安全觸發 DOM 重繪
                 handleNewMessage(d.data);
+            }
+        })
+        .catch(err => {
+            console.error('發送失敗:', err);
+        })
+        .finally(() => {
+            // 解鎖按鈕
+            if (submitBtn) submitBtn.disabled = false;
+        });
+    };
+
+    window.submitPost = function(e) {
+        e.preventDefault();
+        const form = e.target;
+        const fi = form.querySelector('input[type="file"]');
+        const submitBtn = form.querySelector('button[type="submit"]');
+
+        if (fi?.files.length > 0 && fi.files[0].size > 50 * 1024 * 1024) {
+            alert('檔案太大，最大限制為 50MB');
+            fi.value = '';
+            return;
+        }
+
+        if (submitBtn) submitBtn.disabled = true;
+
+        fetch("{{ route('messages.store') }}", {
+            method: 'POST',
+            body: new FormData(form),
+            headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }
+        })
+        .then(r => r.json())
+        .then(d => {
+            if (d.success && d.data) {
                 form.reset();
                 const preview = document.getElementById('fprev-main');
                 if (preview) preview.innerHTML = '';
+                handleNewMessage(d.data);
             } else {
                 loadMessages(true);
                 form.reset();
             }
+        })
+        .catch(err => console.error('貼文失敗:', err))
+        .finally(() => {
+            if (submitBtn) submitBtn.disabled = false;
         });
     };
 
