@@ -533,10 +533,15 @@
         .then(d => {
             if (d.success && d.data) {
                 const newMsg = d.data;
-                newMsg.children = [];
-                window.globalMsgMap.set(newMsg.id, newMsg);
-                const list = document.getElementById('messages-list');
-                list.insertAdjacentHTML('afterbegin', buildRootHTML(newMsg));
+
+                // 防護：WebSocket 可能已經先渲染過了，不重複插入
+                if (!window.globalMsgMap.has(newMsg.id)) {
+                    newMsg.children = [];
+                    window.globalMsgMap.set(newMsg.id, newMsg);
+                    const list = document.getElementById('messages-list');
+                    list.insertAdjacentHTML('afterbegin', buildRootHTML(newMsg));
+                }
+
                 form.reset();
                 const preview = document.getElementById('fprev-main');
                 if (preview) preview.innerHTML = '';
