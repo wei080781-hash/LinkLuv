@@ -177,13 +177,20 @@
                 console.log(document.getElementById('messages-list').innerHTML);
         } else {
             // 回覆：找到根貼文並局部重繪
+
+            console.log("========== handleNewMessage ==========");
+            console.log("newMsg =", newMsg);
             const rootId = findRootId(newMsg.parent_id);
+            console.log("rootId =", rootId);
             const trueParent = window.globalMsgMap.get(newMsg.parent_id);
+            console.log("trueParent =", trueParent);
             if (trueParent) {
+                console.log("children before =", trueParent.children);
                 if (!trueParent.children) trueParent.children = [];
                 // 檢查是否重複，不重複才塞入
                 if (!trueParent.children.some(c => c.id === newMsg.id)) {    
                     trueParent.children.push(newMsg);
+                    console.log("children after =", trueParent.children);
                 }
             }
             
@@ -191,7 +198,9 @@
             window.expandedSet.add(rootId);
 
             const rootEl = document.getElementById(`msg-${rootId}`);
+            onsole.log("rootEl =", rootEl);
             const rootMsg = window.globalMsgMap.get(rootId);
+            console.log("rootMsg =", rootMsg);
 
             if (rootEl && rootMsg) {
                 // 防護：若使用者正在該卡片內打字，跳過重繪避免焦點丟失
