@@ -160,7 +160,11 @@
     // =========================================================
     
     window.handleNewMessage = function(newMsg) {
-
+        newMsg.id = Number(newMsg.id);
+        newMsg.parent_id =
+        newMsg.parent_id == null
+            ? null
+            : Number(newMsg.parent_id);
         console.log(typeof newMsg.id);
         console.log(typeof newMsg.parent_id);
         console.log(
@@ -207,7 +211,7 @@
             window.expandedSet.add(rootId);
 
             const rootEl = document.getElementById(`msg-${rootId}`);
-            onsole.log("rootEl =", rootEl);
+            console.log("rootEl =", rootEl);
             const rootMsg = window.globalMsgMap.get(rootId);
             console.log("rootMsg =", rootMsg);
 
