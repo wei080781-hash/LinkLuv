@@ -151,7 +151,7 @@
         window.Echo.channel('wall-channel')
             .listen('.message.created', (e) => {
                 handleNewMessage(e.message);
-            });
+            })
 
             .listen('.message.liked', (e) => {
             handleLikeBroadcast(e);
