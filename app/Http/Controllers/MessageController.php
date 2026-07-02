@@ -238,26 +238,30 @@ class MessageController extends Controller
     }
 
     public function like(Message $message) 
-    {
-        $userId = auth()->id();
-        $like = $message->likes()->where('user_id', $userId)->first();
-        
-        if ($like) {
-            $like->delete();
-            $isLiked = false;
-        } else {
-            $message->likes()->create(['user_id' => $userId]);
-            $isLiked = true;
-        }
-
-        for ($i = 1; $i <= 10; $i++) {
-            Cache::forget("messages_feed_page_{$i}");
-        } 
-
-        return response()->json([
-             'success' => true, 
-             'liked' => $isLiked,
-             'likes_count' => $message->likes()->count()
-        ]);    
+{
+    $userId = auth()->id();
+    $like = $message->likes()->where('user_id', $userId)->first();
+    
+    if ($like) {
+        $like->delete();
+        $isLiked = false;
+    } else {
+        $message->likes()->create(['user_id' => $userId]);
+        $isLiked = true;
     }
+
+    for ($i = 1; $i <= 10; $i++) {
+        Cache::forget("messages_feed_page_{$i}");
+    } 
+
+    // 🔥 【本次新增的核心發射鈕】：裝上廣播拉桿
+    $currentLikesCount = $message->likes()->count();
+    broadcast(new \App\Events\MessageLiked($message->id, $currentLikesCount, $isLiked))->toOthers();
+
+    return response()->json([
+         'success' => true, 
+         'liked' => $isLiked,
+         'likes_count' => $currentLikesCount
+    ]);    
+    }   
 }
