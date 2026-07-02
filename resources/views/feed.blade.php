@@ -155,7 +155,7 @@
 
             .listen('.message.liked', (e) => {
             handleLikeBroadcast(e);
-            });       
+        });    
     }
 
 
