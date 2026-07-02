@@ -160,20 +160,26 @@
 
 
     window.handleLikeBroadcast = function(e) {
-        console.log("📡 [雷達成功攔截廣播] 收到別人的點讚訊號！包裹內容：", e);
-        
-        const targetId = Number(e.messageId || e.id);
-        const newCount = Number(e.likesCount || e.likes_count);
-        
-        if (window.globalMsgMap.has(targetId)) {
-            const msg = window.globalMsgMap.get(targetId);
-            msg.likes_count = newCount;
-            console.log(`[記憶體同步] 已將地圖中的 ID: ${targetId} 讚數修正為: ${newCount}`);
-        }
-        
-        const countEl = document.getElementById(`lcount-${targetId}`);
-        
-        if (countEl) {
+    console.log("📡 [雷達成功攔截廣播] 收到別人的點讚訊號！包裹內容：", e);
+    
+    // 1. 解析目標 ID
+    const targetId = Number(e.messageId ?? e.id);
+    
+    // 2. 升級改用 ?? 運算子，精準攔截數字 0
+    const newCount = Number(e.likesCount ?? e.likes_count ?? 0);
+    
+    console.log(`[探針測試] 經過 ?? 判定後的 newCount 理論數值為: ${newCount}`);
+    
+    // 3. 同步中央記憶體
+    if (window.globalMsgMap.has(targetId)) {
+        const msg = window.globalMsgMap.get(targetId);
+        msg.likes_count = newCount;
+        console.log(`[記憶體同步] 已將地圖中的 ID: ${targetId} 讚數修正為: ${newCount}`);
+    }
+    
+    // 4. 精準抹繪網頁 DOM 數字
+    const countEl = document.getElementById(`lcount-${targetId}`);
+    if (countEl) {
             countEl.textContent = newCount;
             console.log(`[DOM 抹繪] 已成功將網頁上的計數器更新為: ${newCount}`);
         }
