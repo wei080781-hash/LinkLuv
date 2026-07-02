@@ -679,7 +679,8 @@
 
     window.toggleLike = function(id) {
         id = Number(id);
-
+        
+        console.log(`[探針 1][點擊觸發] 準備發送點讚請求，目標 ID: ${id}, 型態: ${typeof id}`);
         // 🚀 直接發送請求，不提前抓取可能變動的 DOM 節點
         fetch(`/messages/${id}/like`, {
             method: 'POST',
@@ -687,14 +688,29 @@
         })
         .then(r => r.json())
         .then(d => {
+            console.log(`[探針 2][後端回應抵達] 收到後端回傳物件:`, d);
+
             // ✅ 收到回應後的最後一刻，才抓取網頁上當下最新、活著的節點
             const btn = document.querySelector(`#msg-${id} .like-btn, [data-id="${id}"] .like-btn`);
             const countEl = document.getElementById(`lcount-${id}`);
 
+            console.log(`[探針 3][DOM 節點盤查]`, {
+            "搜尋目標按鈕": `#msg-${id} .like-btn`,
+            "抓取到的按鈕結果 (btn)": btn,
+            "搜尋目標計數器": `lcount-${id}`,
+            "抓取到的計數器結果 (countEl)": countEl
+            });
+
             // ✅ 防空檢查：若在等待期間留言被刪除或找不到節點，直接結束不執行，防止程式當機
-            if (!btn || !countEl) return;
+            if (!btn || !countEl) {
+                console.warn(`[探針 4][📢 警告 - 程式在此中斷] 原因：在畫面上找不到對應的按鈕或計數器節點！`);
+                return;
+            }
 
             if (d.likes_count !== undefined) {
+
+                console.log(`[探針 5][執行路線 A] 後端有給數字。準備將計數器改為: ${d.likes_count}, 按鈕點讚狀態: ${d.is_liked}`);
+
                 countEl.textContent = d.likes_count;
                 if (d.is_liked) {
                     btn.classList.add('text-pink-500', 'font-bold');
@@ -706,35 +722,47 @@
 
                 // 同步更新全域記憶體資料，避免下次被 WebSocket 重繪洗掉
                 if (window.globalMsgMap.has(id)) {
+                    console.log(`[探針 5-1] 成功找到 globalMsgMap 中的資料，正在同步記憶體狀態...`);
                     const msg = window.globalMsgMap.get(id);
                     msg.likes_count = d.likes_count;
                     msg.is_liked = d.is_liked;
-                }
-            } else {
-                // 路線 B：後端未回傳數據時的備用前端模擬邏輯
-                const isLiked = btn.classList.contains('text-pink-500');
-                let count = parseInt(countEl.textContent) || 0;
-                if (isLiked) {
-                    count = Math.max(0, count - 1);
-                    btn.classList.remove('text-pink-500', 'font-bold');
-                    btn.classList.add('text-gray-400');
+                
                 } else {
-                    count += 1;
-                    btn.classList.add('text-pink-500', 'font-bold');
-                    btn.classList.remove('text-gray-400');
+                    console.warn(`[探針 5-2][📢 警告] globalMsgMap 裡面竟然找不到 ID: ${id} 的留言！`);
                 }
-                countEl.textContent = count;
+                } else {
+                    // 📡 探針 6：確認走入路線 B (後端沒給數字，前端自立自強模擬)
+                    console.log(`[探針 6][執行路線 B] 後端沒給數字，啟動前端模擬計算`);
 
-                // 同步更新全域記憶體的模擬狀態
-                if (window.globalMsgMap.has(id)) {
-                    const msg = window.globalMsgMap.get(id);
-                    msg.likes_count = count;
-                    msg.is_liked = !isLiked;
-                }
+                    // 路線 B：後端未回傳數據時的備用前端模擬邏輯
+                    const isLiked = btn.classList.contains('text-pink-500');
+                    let count = parseInt(countEl.textContent) || 0;
+                    if (isLiked) {
+                        count = Math.max(0, count - 1);
+                        btn.classList.remove('text-pink-500', 'font-bold');
+                        btn.classList.add('text-gray-400');
+                    } else {
+                        count += 1;
+                        btn.classList.add('text-pink-500', 'font-bold');
+                        btn.classList.remove('text-gray-400');
+                    }
+                    countEl.textContent = count;
+
+                    // 同步更新全域記憶體的模擬狀態
+                    if (window.globalMsgMap.has(id)) {
+                        const msg = window.globalMsgMap.get(id);
+                        msg.likes_count = count;
+                        msg.is_liked = !isLiked;
+                    }
             }
+
+            // 📡 探針 7：確認整套點讚邏輯全部執行完畢
+            console.log(`[探針 7][流程圓滿結束] ID: ${id} 的點讚畫面更新動作已全部派發完畢。`);
         })
-        .catch(err => console.error('點讚發送失敗:', err));
-    };
+        .catch(err => {
+        console.error('[探針 8][❌ 嚴重錯誤] 點讚發送失敗，錯誤詳細訊息:', err);
+    });
+};    
 
     window.previewMedia = function(input, previewId) {
         const file = input.files[0];
