@@ -709,10 +709,10 @@
 
             if (d.likes_count !== undefined) {
 
-                console.log(`[探針 5][執行路線 A] 後端有給數字。準備將計數器改為: ${d.likes_count}, 按鈕點讚狀態: ${d.is_liked}`);
+                console.log(`[探針 5][執行路線 A] 後端有給數字。準備將計數器改為: ${d.likes_count}, 按鈕點讚狀態: ${d.liked}`);
 
                 countEl.textContent = d.likes_count;
-                if (d.is_liked) {
+                if (d.liked) {
                     btn.classList.add('text-pink-500', 'font-bold');
                     btn.classList.remove('text-gray-400');
                 } else {
