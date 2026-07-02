@@ -725,7 +725,7 @@
                     console.log(`[探針 5-1] 成功找到 globalMsgMap 中的資料，正在同步記憶體狀態...`);
                     const msg = window.globalMsgMap.get(id);
                     msg.likes_count = d.likes_count;
-                    msg.is_liked = d.is_liked;
+                    msg.is_liked = d.liked;
                 
                 } else {
                     console.warn(`[探針 5-2][📢 警告] globalMsgMap 裡面竟然找不到 ID: ${id} 的留言！`);
