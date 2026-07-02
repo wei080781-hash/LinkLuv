@@ -678,16 +678,22 @@
     };
 
     window.toggleLike = function(id) {
-        const btn = document.querySelector(`#msg-${id} .like-btn, [data-id="${id}"] .like-btn`);
-        const countEl = document.getElementById(`lcount-${id}`);
-        if (!btn || !countEl) return;
+        id = Number(id);
 
+        // 🚀 直接發送請求，不提前抓取可能變動的 DOM 節點
         fetch(`/messages/${id}/like`, {
             method: 'POST',
             headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }
         })
         .then(r => r.json())
         .then(d => {
+            // ✅ 收到回應後的最後一刻，才抓取網頁上當下最新、活著的節點
+            const btn = document.querySelector(`#msg-${id} .like-btn, [data-id="${id}"] .like-btn`);
+            const countEl = document.getElementById(`lcount-${id}`);
+
+            // ✅ 防空檢查：若在等待期間留言被刪除或找不到節點，直接結束不執行，防止程式當機
+            if (!btn || !countEl) return;
+
             if (d.likes_count !== undefined) {
                 countEl.textContent = d.likes_count;
                 if (d.is_liked) {
@@ -697,12 +703,15 @@
                     btn.classList.remove('text-pink-500', 'font-bold');
                     btn.classList.add('text-gray-400');
                 }
+
+                // 同步更新全域記憶體資料，避免下次被 WebSocket 重繪洗掉
                 if (window.globalMsgMap.has(id)) {
                     const msg = window.globalMsgMap.get(id);
                     msg.likes_count = d.likes_count;
                     msg.is_liked = d.is_liked;
                 }
             } else {
+                // 路線 B：後端未回傳數據時的備用前端模擬邏輯
                 const isLiked = btn.classList.contains('text-pink-500');
                 let count = parseInt(countEl.textContent) || 0;
                 if (isLiked) {
@@ -715,6 +724,8 @@
                     btn.classList.remove('text-gray-400');
                 }
                 countEl.textContent = count;
+
+                // 同步更新全域記憶體的模擬狀態
                 if (window.globalMsgMap.has(id)) {
                     const msg = window.globalMsgMap.get(id);
                     msg.likes_count = count;
