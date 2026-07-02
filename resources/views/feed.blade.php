@@ -564,7 +564,14 @@
             body: new FormData(form),
             headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }
         })
-        .then(r => r.json())
+        .then(r => {
+            if (r.status === 419) {
+            alert('登入已過期，頁面將自動重新整理');
+            window.location.reload();
+            return Promise.reject('419');
+        }
+        return r.json();
+    })
         .then(d => {
             console.log("收到資料：", d);
             if (d.success && d.data) {
@@ -609,7 +616,14 @@
             body: new FormData(form),
             headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }
         })
-        .then(r => r.json())
+        .then(r => {
+            if (r.status === 419) {
+            alert('登入已過期，頁面將自動重新整理');
+            window.location.reload();
+            return Promise.reject('419');
+        }
+         return r.json();
+    })
         .then(d => {
             if (d.success && d.data) {
                 form.reset();
