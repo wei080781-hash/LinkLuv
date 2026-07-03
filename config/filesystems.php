@@ -60,7 +60,7 @@ return [
             'throw' => true,
             'report' => false,
             'visibility' => 'public',
-	    'options' => [
+	        'options' => [
                'visibility' => 'public',
             ],
        ],

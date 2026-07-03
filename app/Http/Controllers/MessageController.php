@@ -127,6 +127,7 @@ class MessageController extends Controller
 
         // 若為影片，啟動背景壓縮任務
         if ($mediaType === 'video') {
+            $message->update(['status' => 'processing']);
             CompressVideoJob::dispatch($message);
         }
 

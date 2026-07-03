@@ -75,7 +75,13 @@ public function handle()
             ]);
 
             // 3. 更新資料庫中的影片網址為 S3 的路徑
-            $this->message->update(['video_path' => $s3Key]);
+            $this->message->update([
+                'video_path' => $s3Key,
+                'status'     => 'ready',
+            ]);
+
+            // 廣播通知前端影片已就緒
+            broadcast(new \App\Events\MessageStatusUpdated($this->message));
 
             // ✅ 加這行，清除快取讓前端拿到新資料
             for ($i = 1; $i <= 10; $i++) {
