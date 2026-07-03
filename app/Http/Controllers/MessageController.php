@@ -187,24 +187,27 @@ class MessageController extends Controller
         }
     }
 
-    public function destroy(Message $message)
-    {
-        \Log::info('刪除嘗試:', [
-            'current_user_id' => auth()->id(),
-            'message_owner_id' => $message->user_id,
-            'message_id' => $message->id
-        ]);
+    public function destroy(Message $message){
+    \Log::info('刪除嘗試:', [
+        'current_user_id' => auth()->id(),
+        'message_owner_id' => $message->user_id,
+        'message_id' => $message->id
+    ]);
 
-        if ($message->user_id !== auth()->id()) {
-            return response()->json(['success' => false, 'message' => '無權刪除'], 403);
-        }
+    if ($message->user_id !== auth()->id()) {
+        return response()->json(['success' => false, 'message' => '無權刪除'], 403);
+    }
 
-        $message->replies()->delete();
-        $message->delete();
+    $messageId = $message->id; // 先記住 ID，刪除後就拿不到了
+    $message->replies()->delete();
+    $message->delete();
 
-        for ($i = 1; $i <= 10; $i++) {
-            Cache::forget("messages_feed_page_{$i}");
-        }     
+    // 廣播通知所有人即時移除這則訊息
+    broadcast(new \App\Events\MessageDeleted($messageId))->toOthers();
+
+    for ($i = 1; $i <= 10; $i++) {
+        Cache::forget("messages_feed_page_{$i}");
+    }
         return response()->json(['success' => true]);
     }
 

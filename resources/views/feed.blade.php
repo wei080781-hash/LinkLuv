@@ -175,6 +175,13 @@
                         rootEl.outerHTML = buildRootHTML(rootMsg);
                     }
                 }
+            })
+            .listen('.message.deleted', (e) => {
+                // 即時從畫面移除被刪除的訊息
+                const msgId = Number(e.messageId);
+                const el = document.getElementById(`msg-${msgId}`);
+                if (el) el.remove();
+                window.globalMsgMap.delete(msgId);
             });
     }
 
