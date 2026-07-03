@@ -95,11 +95,18 @@
         display: block;
         cursor: pointer;
     }
+
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+    .animate-spin {
+        animation: spin 1s linear infinite;
+    }
     </style>
 
     <script>
     // =========================================================
-    // 1. 全域狀態初始化（統一用 window，不重複宣告）
+    // 1. 全域狀態初始化
     // =========================================================
     window.globalMsgMap = new Map();
     window.expandedSet = new Set();
@@ -113,7 +120,6 @@
     // 2. 頁面載入後統一啟動
     // =========================================================
     document.addEventListener('DOMContentLoaded', () => {
-        // A. 啟動無限滾動觀察器
         const sentinel = document.getElementById('scroll-sentinel');
         const observer = new IntersectionObserver((entries) => {
             if (entries[0].isIntersecting && !isLoading && hasMore) {
@@ -123,15 +129,12 @@
         }, { rootMargin: '0px 0px 100px 0px' });
         observer.observe(sentinel);
 
-        // B. 載入第一頁
         loadMessages();
-
-        // C. 啟動 WebSocket（輪詢等待 Echo 載入）
         initEchoWithRetry();
     });
 
     // =========================================================
-    // 3. WebSocket 初始化（帶重試機制）
+    // 3. WebSocket 初始化
     // =========================================================
     function initEchoWithRetry() {
         let retries = 0;
@@ -152,109 +155,63 @@
             .listen('.message.created', (e) => {
                 handleNewMessage(e.message);
             })
+            .listen('.message.status.updated', (e) => {
+                // 影片壓縮完成，局部更新該則訊息的播放器
+                const updatedMsg = e.message;
+                const msgId = Number(updatedMsg.id);
+                const msg = window.globalMsgMap.get(msgId);
 
-            .listen('.message.liked', (e) => {
-            handleLikeBroadcast(e);
-        });    
+                if (msg) {
+                    // 更新記憶體中的狀態
+                    msg.status = updatedMsg.status;
+                    msg.video_path = updatedMsg.video_path;
+
+                    // 找到根貼文並重繪
+                    const rootId = msg.parent_id ? findRootId(msg.parent_id) : msgId;
+                    window.expandedSet.add(rootId);
+                    const rootEl = document.getElementById(`msg-${rootId}`);
+                    const rootMsg = window.globalMsgMap.get(rootId);
+                    if (rootEl && rootMsg) {
+                        rootEl.outerHTML = buildRootHTML(rootMsg);
+                    }
+                }
+            });
     }
-
-
-    window.handleLikeBroadcast = function(e) {
-    console.log("📡 [雷達成功攔截廣播] 收到別人的點讚訊號！包裹內容：", e);
-    
-    // 1. 解析目標 ID
-    const targetId = Number(e.messageId ?? e.id);
-    
-    // 2. 升級改用 ?? 運算子，精準攔截數字 0
-    const newCount = Number(e.likesCount ?? e.likes_count ?? 0);
-    
-    console.log(`[探針測試] 經過 ?? 判定後的 newCount 理論數值為: ${newCount}`);
-    
-    // 3. 同步中央記憶體
-    if (window.globalMsgMap.has(targetId)) {
-        const msg = window.globalMsgMap.get(targetId);
-        msg.likes_count = newCount;
-        console.log(`[記憶體同步] 已將地圖中的 ID: ${targetId} 讚數修正為: ${newCount}`);
-    }
-    
-    // 4. 精準抹繪網頁 DOM 數字
-    const countEl = document.getElementById(`lcount-${targetId}`);
-    if (countEl) {
-            countEl.textContent = newCount;
-            console.log(`[DOM 抹繪] 已成功將網頁上的計數器更新為: ${newCount}`);
-        }
-    };
 
     // =========================================================
     // 4. 統一處理新訊息入口
-    //    WebSocket、submitPost、submitReply 全部走這裡
     // =========================================================
-    
     window.handleNewMessage = function(newMsg) {
-        console.log("★★★★ 我改過 handleNewMessage 了 ★★★★");
         newMsg.id = Number(newMsg.id);
-        newMsg.parent_id =
-        newMsg.parent_id == null
-            ? null
-            : Number(newMsg.parent_id);
-        console.log(typeof newMsg.id);
-        console.log(typeof newMsg.parent_id);
-        console.log(
-        [...window.globalMsgMap.keys()]
-            .slice(0,10)
-            .map(k => [k, typeof k])
-        );
+        newMsg.parent_id = newMsg.parent_id == null ? null : Number(newMsg.parent_id);
 
-        console.log("parent_id =", newMsg.parent_id);
-
-        // 去重防呆：已存在就跳過
         if (window.globalMsgMap.has(newMsg.id)) return;
 
         newMsg.children = [];
         window.globalMsgMap.set(newMsg.id, newMsg);
 
         if (!newMsg.parent_id) {
-            // 全新貼文：插到最頂端
             const list = document.getElementById('messages-list');
             if (list) list.insertAdjacentHTML('afterbegin', buildRootHTML(newMsg));
-                console.log("===== 插入後 =====");
-                console.log(document.getElementById(`msg-${newMsg.id}`));
-                console.log(document.getElementById('messages-list').innerHTML);
         } else {
-            // 回覆：找到根貼文並局部重繪
-
-            console.log("========== handleNewMessage ==========");
-            console.log("newMsg =", newMsg);
             const rootId = findRootId(newMsg.parent_id);
-            console.log("rootId =", rootId);
             const trueParent = window.globalMsgMap.get(newMsg.parent_id);
-            console.log("trueParent =", trueParent);
             if (trueParent) {
-                console.log("children before =", trueParent.children);
                 if (!trueParent.children) trueParent.children = [];
-                // 檢查是否重複，不重複才塞入
-                if (!trueParent.children.some(c => c.id === newMsg.id)) {    
+                if (!trueParent.children.some(c => c.id === newMsg.id)) {
                     trueParent.children.push(newMsg);
-                    console.log("children after =", trueParent.children);
                 }
             }
-            
-            // 強制展開該根貼文的檢視狀態
-            window.expandedSet.add(rootId);
 
+            window.expandedSet.add(rootId);
             const rootEl = document.getElementById(`msg-${rootId}`);
-            console.log("rootEl =", rootEl);
             const rootMsg = window.globalMsgMap.get(rootId);
-            console.log("rootMsg =", rootMsg);
 
             if (rootEl && rootMsg) {
-                // 防護：若使用者正在該卡片內打字，跳過重繪避免焦點丟失
                 const activeInput = rootEl.querySelector('input[name="content"], textarea');
                 const isFocused = activeInput && (document.activeElement === activeInput);
                 const hasTyped = activeInput && activeInput.value.trim() !== '';
-
                 if (!isFocused && !hasTyped) {
-                    // 核心重繪：此時記憶體結構已正確，深層留言將會完美渲染
                     rootEl.outerHTML = buildRootHTML(rootMsg);
                 }
             }
@@ -492,16 +449,36 @@
 
     function buildMediaHtml(msg) {
         const s3BaseUrl = 'https://linkluv-media-bucket.s3.ap-east-2.amazonaws.com/';
+
         if (msg.media_type === 'image' && msg.image_path) {
             const isS3 = msg.image_path.startsWith('images/') || !msg.image_path.startsWith('storage/');
             const imgUrl = isS3 ? `${s3BaseUrl}${msg.image_path}` : `/storage/${msg.image_path}`;
             return `<div class="msg-media"><img src="${imgUrl}" onclick="openLightbox('image','${imgUrl}')"></div>`;
         }
+
         if (msg.media_type === 'video' && msg.video_path) {
+            // 影片還在壓縮中：顯示轉圈提示
+            if (msg.status === 'processing') {
+                return `<div class="msg-media flex items-center gap-2 mt-2 text-xs text-gray-400">
+                    <svg class="animate-spin w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                    </svg>
+                    影片處理中，完成後將自動顯示...
+                </div>`;
+            }
+            // 壓縮失敗：顯示錯誤提示
+            if (msg.status === 'failed') {
+                return `<div class="msg-media flex items-center gap-2 mt-2 text-xs text-red-400">
+                    ⚠️ 影片轉檔失敗，請重新上傳
+                </div>`;
+            }
+            // status === 'ready'：正常顯示播放器
             const isS3 = msg.video_path.startsWith('videos/') || !msg.video_path.startsWith('storage/');
             const videoUrl = isS3 ? `${s3BaseUrl}${msg.video_path}` : `/storage/${msg.video_path}`;
             return `<div class="msg-media"><video controls preload="metadata"><source src="${videoUrl}" type="video/mp4">您的瀏覽器不支援影片播放。</video></div>`;
         }
+
         return '';
     }
 
@@ -572,7 +549,6 @@
         }
     };
 
-    // ✅ 完美修正後的 submitReply 函式
     window.submitReply = function(e, rootId) {
         e.preventDefault();
         const form = e.target;
@@ -585,9 +561,7 @@
             return;
         }
 
-        // 防重複點擊鎖定
         if (submitBtn) submitBtn.disabled = true;
-
         const msgId = form.querySelector('input[name="parent_id"]')?.value;
 
         fetch("{{ route('messages.store') }}", {
@@ -597,33 +571,26 @@
         })
         .then(r => {
             if (r.status === 419) {
-            alert('登入已過期，頁面將自動重新整理');
-            window.location.reload();
-            return Promise.reject('419');
-        }
-        return r.json();
-    })
+                alert('登入已過期，頁面將自動重新整理');
+                window.location.reload();
+                return Promise.reject('419');
+            }
+            return r.json();
+        })
         .then(d => {
-            console.log("收到資料：", d);
             if (d.success && d.data) {
-                // 1. 先清空表單，釋放 hasTyped 狀態
                 form.reset();
                 if (msgId) {
                     const preview = document.getElementById(`fprev-${msgId}`);
                     if (preview) preview.innerHTML = '';
                 }
-                console.log("開始更新畫面");
-                // 2. 再安全觸發 DOM 重繪
                 handleNewMessage(d.data);
-
-                console.log("更新完成");
             }
         })
         .catch(err => {
-            console.error('發送失敗:', err);
+            if (err !== '419') console.error('發送失敗:', err);
         })
         .finally(() => {
-            // 解鎖按鈕
             if (submitBtn) submitBtn.disabled = false;
         });
     };
@@ -649,12 +616,12 @@
         })
         .then(r => {
             if (r.status === 419) {
-            alert('登入已過期，頁面將自動重新整理');
-            window.location.reload();
-            return Promise.reject('419');
-        }
-         return r.json();
-    })
+                alert('登入已過期，頁面將自動重新整理');
+                window.location.reload();
+                return Promise.reject('419');
+            }
+            return r.json();
+        })
         .then(d => {
             if (d.success && d.data) {
                 form.reset();
@@ -666,7 +633,9 @@
                 form.reset();
             }
         })
-        .catch(err => console.error('貼文失敗:', err))
+        .catch(err => {
+            if (err !== '419') console.error('貼文失敗:', err);
+        })
         .finally(() => {
             if (submitBtn) submitBtn.disabled = false;
         });
@@ -710,90 +679,58 @@
 
     window.toggleLike = function(id) {
         id = Number(id);
-        
-        console.log(`[探針 1][點擊觸發] 準備發送點讚請求，目標 ID: ${id}, 型態: ${typeof id}`);
-        // 🚀 直接發送請求，不提前抓取可能變動的 DOM 節點
         fetch(`/messages/${id}/like`, {
             method: 'POST',
             headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }
         })
         .then(r => r.json())
         .then(d => {
-            console.log(`[探針 2][後端回應抵達] 收到後端回傳物件:`, d);
-
-            // ✅ 收到回應後的最後一刻，才抓取網頁上當下最新、活著的節點
+            // fetch 完成後才查詢 DOM，避免重繪導致拿到舊節點
             const btn = document.querySelector(`#msg-${id} .like-btn, [data-id="${id}"] .like-btn`);
             const countEl = document.getElementById(`lcount-${id}`);
 
-            console.log(`[探針 3][DOM 節點盤查]`, {
-            "搜尋目標按鈕": `#msg-${id} .like-btn`,
-            "抓取到的按鈕結果 (btn)": btn,
-            "搜尋目標計數器": `lcount-${id}`,
-            "抓取到的計數器結果 (countEl)": countEl
-            });
-
-            // ✅ 防空檢查：若在等待期間留言被刪除或找不到節點，直接結束不執行，防止程式當機
-            if (!btn || !countEl) {
-                console.warn(`[探針 4][📢 警告 - 程式在此中斷] 原因：在畫面上找不到對應的按鈕或計數器節點！`);
-                return;
-            }
-
             if (d.likes_count !== undefined) {
-
-                console.log(`[探針 5][執行路線 A] 後端有給數字。準備將計數器改為: ${d.likes_count}, 按鈕點讚狀態: ${d.liked}`);
-
-                countEl.textContent = d.likes_count;
-                if (d.liked) {
-                    btn.classList.add('text-pink-500', 'font-bold');
-                    btn.classList.remove('text-gray-400');
-                } else {
-                    btn.classList.remove('text-pink-500', 'font-bold');
-                    btn.classList.add('text-gray-400');
-                }
-
-                // 同步更新全域記憶體資料，避免下次被 WebSocket 重繪洗掉
-                if (window.globalMsgMap.has(id)) {
-                    console.log(`[探針 5-1] 成功找到 globalMsgMap 中的資料，正在同步記憶體狀態...`);
-                    const msg = window.globalMsgMap.get(id);
-                    msg.likes_count = d.likes_count;
-                    msg.is_liked = d.liked;
-                
-                } else {
-                    console.warn(`[探針 5-2][📢 警告] globalMsgMap 裡面竟然找不到 ID: ${id} 的留言！`);
-                }
-                } else {
-                    // 📡 探針 6：確認走入路線 B (後端沒給數字，前端自立自強模擬)
-                    console.log(`[探針 6][執行路線 B] 後端沒給數字，啟動前端模擬計算`);
-
-                    // 路線 B：後端未回傳數據時的備用前端模擬邏輯
-                    const isLiked = btn.classList.contains('text-pink-500');
-                    let count = parseInt(countEl.textContent) || 0;
-                    if (isLiked) {
-                        count = Math.max(0, count - 1);
+                if (countEl) countEl.textContent = d.likes_count;
+                if (btn) {
+                    if (d.is_liked) {
+                        btn.classList.add('text-pink-500', 'font-bold');
+                        btn.classList.remove('text-gray-400');
+                    } else {
                         btn.classList.remove('text-pink-500', 'font-bold');
                         btn.classList.add('text-gray-400');
-                    } else {
-                        count += 1;
+                    }
+                }
+                if (window.globalMsgMap.has(id)) {
+                    const msg = window.globalMsgMap.get(id);
+                    msg.likes_count = d.likes_count;
+                    msg.is_liked = d.is_liked;
+                }
+            } else {
+                const isLiked = btn && btn.classList.contains('text-pink-500');
+                let count = parseInt(countEl?.textContent) || 0;
+                if (isLiked) {
+                    count = Math.max(0, count - 1);
+                    if (btn) {
+                        btn.classList.remove('text-pink-500', 'font-bold');
+                        btn.classList.add('text-gray-400');
+                    }
+                } else {
+                    count += 1;
+                    if (btn) {
                         btn.classList.add('text-pink-500', 'font-bold');
                         btn.classList.remove('text-gray-400');
                     }
-                    countEl.textContent = count;
-
-                    // 同步更新全域記憶體的模擬狀態
-                    if (window.globalMsgMap.has(id)) {
-                        const msg = window.globalMsgMap.get(id);
-                        msg.likes_count = count;
-                        msg.is_liked = !isLiked;
-                    }
+                }
+                if (countEl) countEl.textContent = count;
+                if (window.globalMsgMap.has(id)) {
+                    const msg = window.globalMsgMap.get(id);
+                    msg.likes_count = count;
+                    msg.is_liked = !isLiked;
+                }
             }
-
-            // 📡 探針 7：確認整套點讚邏輯全部執行完畢
-            console.log(`[探針 7][流程圓滿結束] ID: ${id} 的點讚畫面更新動作已全部派發完畢。`);
         })
-        .catch(err => {
-        console.error('[探針 8][❌ 嚴重錯誤] 點讚發送失敗，錯誤詳細訊息:', err);
-    });
-};    
+        .catch(err => console.error('點讚發送失敗:', err));
+    };
 
     window.previewMedia = function(input, previewId) {
         const file = input.files[0];
