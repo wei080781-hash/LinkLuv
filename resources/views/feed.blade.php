@@ -325,7 +325,7 @@
     // 7. HTML 建構函式
     // =========================================================
     function buildRootHTML(msg) {
-        console.log(`🎨 繪製訊息 ${msg.id}，目前的 content 是: "${msg.content}"`);
+        console.log(`🎨 正在繪製回覆 ${msg.id}，內容為: "${msg.content}", 圖片路徑為: "${msg.image_path}"`);
         const hasReplies = msg.children && msg.children.length > 0;
         const isOpen = window.expandedSet.has(msg.id);
         const count = msg.children ? msg.children.length : 0;
