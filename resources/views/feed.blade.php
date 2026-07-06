@@ -321,6 +321,7 @@
     // 7. HTML 建構函式
     // =========================================================
     function buildRootHTML(msg) {
+        console.log("正在重新繪製的訊息內容是:", rootMsg.content);
         const hasReplies = msg.children && msg.children.length > 0;
         const isOpen = window.expandedSet.has(msg.id);
         const count = msg.children ? msg.children.length : 0;
