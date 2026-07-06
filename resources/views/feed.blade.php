@@ -837,8 +837,16 @@
     };
     // 將你的非同步更新手術功能，完整放入這個 <script> 盒子中
     function sendUpdateToBackend(messageId) {
+            console.log("1111 系統回報：確認成功觸發 sendUpdateToBackend 函式！傳進來的 ID 是:", messageId);
             const textareaEl = document.getElementById(`edit-textarea-${messageId}`);
+
+            // 🍞 麵包屑 2：測試有沒有成功抓到那個輸入框元件
+            console.log("2222 系統回報：抓到的輸入框元件是:", textareaEl);
+
             const newText = textareaEl.value;
+
+            // 🍞 麵包屑 3：測試有沒有成功拿到裡面的字
+            console.log("3333 系統回報：準備送出的最新文字是:", newText);
 
             fetch(`/messages/${messageId}`, {
                 method: 'PUT',
@@ -848,8 +856,12 @@
                 },
                 body: JSON.stringify({ content: newText })
             })
-            .then(response => response.json())
+            .then(response => {
+                console.log("4444 系統回報：網路有了回應！原始回應狀態碼是:", response.status);
+                return response.json();
+            })    
             .then(data => {
+                console.log("5555 系統回報：後端解碼後的 JSON 資料是:", data);
                 if (data.success) {
                     const oldMessageEl = document.getElementById(`msg-${messageId}`);
                     const newHtmlString = buildMediaHtml(data.message);
