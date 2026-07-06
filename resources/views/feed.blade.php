@@ -209,6 +209,7 @@
     // 4. 統一處理新訊息入口
     // =========================================================
     window.handleNewMessage = function(newMsg) {
+        console.log("🛠️ 正在渲染的新訊息內容:", msg);
         newMsg.id = Number(newMsg.id);
         newMsg.parent_id = newMsg.parent_id == null ? null : Number(newMsg.parent_id);
 
