@@ -162,20 +162,28 @@
                 const msg = window.globalMsgMap.get(msgId);
 
                 if (msg) {
+                    // 資料流向：把包裹裡的最新字串 "text 013"，強行寫入 B 帳號的快取地圖中！
+                    msg.content = updatedMsg.content;
+                    
                     // 更新記憶體中的狀態
                     msg.status = updatedMsg.status;
                     msg.video_path = updatedMsg.video_path;
 
                     // 找到根貼文並重繪
                     const rootId = msg.parent_id ? findRootId(msg.parent_id) : msgId;
+
+                    // 把根貼文 ID 鎖定在展開名單中，防止重繪時卡片突然折疊收合
                     window.expandedSet.add(rootId);
+
                     const rootEl = document.getElementById(`msg-${rootId}`);
                     const rootMsg = window.globalMsgMap.get(rootId);
                     if (rootEl && rootMsg) {
                         rootEl.outerHTML = buildRootHTML(rootMsg);
+                        console.log(`🤖 Echo 成功除錯：B 帳號已在背景將訊息 ${msgId} 的記憶體補完並完成全自動重繪！`);
                     }
                 }
             })
+            
             .listen('.message.deleted', (e) => {
                 // 即時從畫面移除被刪除的訊息
                 const msgId = Number(e.messageId);
