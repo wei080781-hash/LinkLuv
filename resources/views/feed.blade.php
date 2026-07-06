@@ -669,7 +669,7 @@
 
         // 3. 把原本的文字換成包含 <textarea> 輸入框與按鈕的 HTML 結構
         // 💡 關鍵修改：我們將輸入框的 ID 統一命名為 `edit-textarea-${id}`，方便儲存時抓取
-        p.innerHTML = `<textarea id="edit-ta-${id}" rows="2" class="w-full text-sm border border-gray-300 rounded-lg p-2 resize-none">${orig}</textarea>
+        p.innerHTML = `<textarea id="edit-textarea-${id}" rows="2" class="w-full text-sm border border-gray-300 rounded-lg p-2 resize-none">${orig}</textarea>
             <div class="flex gap-2 mt-1">
                 <button onclick="saveEdit(${id})" class="text-xs bg-blue-500 text-white px-3 py-1 rounded-lg border-none cursor-pointer">儲存</button>
                 <button onclick="loadMessages(true)" class="text-xs bg-gray-200 text-gray-700 px-3 py-1 rounded-lg border-none cursor-pointer">取消</button>
@@ -678,13 +678,26 @@
 
     window.saveEdit = function(id) {
 
+        // 🍞 麵包屑 1：測試點擊儲存時，有沒有成功開門進入函式
+        console.log("1111 系統回報：確認成功觸發 saveEdit 函式！傳進來的 ID 是:", id);
+
         // 1. 精準抓取剛剛在 editMsg 裡生出來的那個實體輸入框元件
         const textareaEl = document.getElementById(`edit-textarea-${id}`);
 
+        // 🍞 麵包屑 2：測試有沒有成功抓到那個實體元件盒子
+        console.log("2222 系統回報：抓到的輸入框元件是:", textareaEl);
+
         // 2. 提領出使用者在輸入框裡敲下的最新文字內容
         const val = textareaEl?.value;
-        if (!val) return; // 安全機制：萬一沒輸入內容就直接退出
 
+        // 🍞 麵包屑 3：測試有沒有成功拿到裡面的字字串
+        console.log("3333 系統回報：準備送出的最新文字是:", val);
+
+        if (!val) {
+            console.log("⚠️ 守門員警告：因為沒抓到文字（可能為空），程式在此處被強行阻斷攔停！");
+            return; // 安全機制：萬一沒輸入內容就直接退出
+
+        }   
         // 3. 發送非同步請求給後端
         fetch(`/messages/${id}`, {
             method: 'PATCH', // 使用 PATCH 方法進行局部更新
@@ -693,8 +706,15 @@
                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
             },
             body: JSON.stringify({ content: val }) // 將新文字打包成 JSON 傳送
-        }).then(r => r.json())
+        }).then(r =>{ 
+            // 🍞 麵包屑 4：測試網路有沒有回應，以及有沒有過關（例如 200 或 419）
+            console.log("4444 系統回報：網路有了回應！原始回應狀態碼是:", r.status);
+            return r.json();
+        })    
         .then(d => {
+            // 🍞 麵包屑 5：測試解碼後的 Laravel Response 資料包長怎樣
+            console.log("5555 系統回報：後端解碼後的 JSON 資料是:", d);
+
             // 5. 判斷後端資料庫是否順利寫入成功
             if (d.success) {
             
@@ -715,6 +735,7 @@
                 
                 console.log(`訊息 ${id} 原地手術抽換成功！`);
             } else {
+                console.log("⚠️ 警告：找不到最外層 msg-id 大盒子，退回傳統整頁刷新重繪模式");
                 // 備用機制：萬一最外層大盒子沒綁好 id="msg-${id}"，則退回原本的全頁重繪
                 loadMessages(true);
             }
