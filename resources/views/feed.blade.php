@@ -153,17 +153,26 @@
     function setupEcho() {
         window.Echo.channel('wall-channel')
             .listen('.message.created', (e) => {
+                console.log("收到廣播包裹了！", e);
                 handleNewMessage(e.message);
             })
             .listen('.message.status.updated', (e) => {
                 // 影片壓縮完成，局部更新該則訊息的播放器
+                console.log("🚨 【NIKKI 導師雷達】收到狀態更新包裹了！完整的 e 裡面長這樣：", e);
+
                 const updatedMsg = e.message;
                 const msgId = Number(updatedMsg.id);
                 const msg = window.globalMsgMap.get(msgId);
 
                 if (msg) {
-                    // 資料流向：把包裹裡的最新字串 "text 013"，強行寫入 B 帳號的快取地圖中！
-                    msg.content = updatedMsg.content;
+                    // 🔒 【安全防線】：只有當後端送來的包裹裡「真的有文字」時才覆蓋它！
+                    // 這樣可以防止後端因為漏傳 content，而把 B 帳號原本畫面的字給洗成空白
+                    if (updatedMsg.content !== undefined && updatedMsg.content !== null) {
+                        msg.content = updatedMsg.content;
+                        console.log(`✅ 成功同步最新文字為: ${updatedMsg.content}`);
+                    } else {
+                        console.warn(`⚠️ 警告：後端送來的包裹裡沒有 content 欄位！為了防止文字蒸發，B 帳號決定保留原本的文字：${msg.content}`);
+                    }
                     
                     // 更新記憶體中的狀態
                     msg.status = updatedMsg.status;
