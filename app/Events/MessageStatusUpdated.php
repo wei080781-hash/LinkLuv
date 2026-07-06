@@ -31,6 +31,9 @@ class MessageStatusUpdated implements ShouldBroadcast
                 'id'         => $this->message->id,
                 'status'     => $this->message->status,
                 'video_path' => $this->message->video_path,
+                // 🔥 【請在內部精準補上這一行黃金通行證】
+                'content' => $this->message->content,
+
             ]
         ];
     }
