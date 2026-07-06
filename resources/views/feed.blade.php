@@ -164,6 +164,9 @@
                 const msgId = Number(updatedMsg.id);
                 const msg = window.globalMsgMap.get(msgId);
 
+                // 🔥 【偵探追蹤器】：這是重繪前的最後檢查
+                console.log(`🔍 偵探報告：準備重繪訊息 ${msgId}，記憶體裡的 content 是: "${msg?.content}", 廣播包裹來的 content 是: "${updatedMsg.content}"`);
+
                 if (msg) {
                     // 🔒 【安全防線】：只有當後端送來的包裹裡「真的有文字」時才覆蓋它！
                     // 這樣可以防止後端因為漏傳 content，而把 B 帳號原本畫面的字給洗成空白
