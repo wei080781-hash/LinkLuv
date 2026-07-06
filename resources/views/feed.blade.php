@@ -745,6 +745,11 @@
                 
                 // 核心微創手術：原地擦掉舊文字，換上經過 escHtml 安全過濾後的最新文字！
                 contentEl.innerHTML = escHtml(latestText);
+
+                // ✅ 加這行：同步更新記憶體裡的資料，防止 WebSocket 重繪時蓋掉新內容
+                if (window.globalMsgMap.has(Number(id))) {
+                    window.globalMsgMap.get(Number(id)).content = latestText;
+                }
                 
                 console.log(`🎉 訊息 ${id} 原地局部純文字抽換成功！外殼完好，位置絕不移位！`);
             } else {
