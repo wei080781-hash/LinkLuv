@@ -659,9 +659,16 @@
     };
 
     window.editMsg = function(id) {
+        
+        // 1. 先精準找出這則留言存放文字內容的舊標籤
         const p = document.getElementById(`content-${id}`);
-        if (!p) return;
+        if (!p) return;// 安全機制：萬一找不到就直接退出
+
+        // 2. 備份原本寫在裡面的文字內容
         const orig = p.innerText;
+
+        // 3. 把原本的文字換成包含 <textarea> 輸入框與按鈕的 HTML 結構
+        // 💡 關鍵修改：我們將輸入框的 ID 統一命名為 `edit-textarea-${id}`，方便儲存時抓取
         p.innerHTML = `<textarea id="edit-ta-${id}" rows="2" class="w-full text-sm border border-gray-300 rounded-lg p-2 resize-none">${orig}</textarea>
             <div class="flex gap-2 mt-1">
                 <button onclick="saveEdit(${id})" class="text-xs bg-blue-500 text-white px-3 py-1 rounded-lg border-none cursor-pointer">儲存</button>
@@ -670,19 +677,56 @@
     };
 
     window.saveEdit = function(id) {
-        const val = document.getElementById(`edit-ta-${id}`)?.value;
-        if (!val) return;
+
+        // 1. 精準抓取剛剛在 editMsg 裡生出來的那個實體輸入框元件
+        const textareaEl = document.getElementById(`edit-textarea-${id}`);
+
+        // 2. 提領出使用者在輸入框裡敲下的最新文字內容
+        const val = textareaEl?.value;
+        if (!val) return; // 安全機制：萬一沒輸入內容就直接退出
+
+        // 3. 發送非同步請求給後端
         fetch(`/messages/${id}`, {
-            method: 'PATCH',
+            method: 'PATCH', // 使用 PATCH 方法進行局部更新
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
             },
-            body: JSON.stringify({ content: val }),
-        }).then(r => r.json()).then(d => {
-            if (d.success) loadMessages(true);
-        });
-    };
+            body: JSON.stringify({ content: val }) // 將新文字打包成 JSON 傳送
+        }).then(r => r.json())
+        .then(d => {
+            // 5. 判斷後端資料庫是否順利寫入成功
+            if (d.success) {
+            
+            // 6. 【核心改造點】精準找出網頁畫面上這整則留言的「最外層舊大盒子」
+            const oldMessageEl = document.getElementById(`msg-${id}`);
+            
+            if (oldMessageEl) {
+                // 7. 將後端送回來的最新留言資料包，丟進繪製大腦，產出全新的 HTML 純文字字串
+                const newHtmlString = buildMediaHtml(d.message || d.data); 
+                
+                // 8. 建立隱形臨時容器，逼瀏覽器將字串塑造成實體 DOM 節點
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = newHtmlString;
+                const newMessageEl = tempDiv.firstElementChild;
+                
+                // 9. 核心手術：用新節點在畫面上精準原地覆蓋、抽換掉舊節點！
+                oldMessageEl.replaceWith(newMessageEl);
+                
+                console.log(`訊息 ${id} 原地手術抽換成功！`);
+            } else {
+                // 備用機制：萬一最外層大盒子沒綁好 id="msg-${id}"，則退回原本的全頁重繪
+                loadMessages(true);
+            }
+            
+        } else {
+            alert('修改失敗：' + d.message);
+        }
+    })
+    .catch(err => {
+        console.error('儲存編輯時發生網路錯誤:', err);
+    });
+};
 
     window.toggleLike = function(id) {
         id = Number(id);
@@ -791,5 +835,40 @@
         target.classList.add('msg-highlight');
         setTimeout(() => target.classList.remove('msg-highlight'), 1500);
     };
+    // 將你的非同步更新手術功能，完整放入這個 <script> 盒子中
+    function sendUpdateToBackend(messageId) {
+            const textareaEl = document.getElementById(`edit-textarea-${messageId}`);
+            const newText = textareaEl.value;
+
+            fetch(`/messages/${messageId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                },
+                body: JSON.stringify({ content: newText })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const oldMessageEl = document.getElementById(`msg-${messageId}`);
+                    const newHtmlString = buildMediaHtml(data.message);
+                    
+                    const tempDiv = document.createElement('div');
+                    tempDiv.innerHTML = newHtmlString;
+                    const newMessageEl = tempDiv.firstElementChild;
+                    
+                    oldMessageEl.replaceWith(newMessageEl);
+                    console.log(`訊息 ${messageId} 原地更新成功！`);
+                } else {
+                    alert('修改失敗：' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('網路請求發生錯誤：', error);
+            });
+        }
+
+
     </script>
 </x-app-layout>
