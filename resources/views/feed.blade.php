@@ -678,65 +678,61 @@
 
     window.saveEdit = function(id) {
 
-        // 🍞 麵包屑 1：測試點擊儲存時，有沒有成功開門進入函式
-        console.log("1111 系統回報：確認成功觸發 saveEdit 函式！傳進來的 ID 是:", id);
+    // 🍞 麵包屑 1：測試點擊儲存時，有沒有成功開門進入函式
+    console.log("1111 系統回報：確認成功觸發 saveEdit 函式！傳進來的 ID 是:", id);
 
-        // 1. 精準抓取剛剛在 editMsg 裡生出來的那個實體輸入框元件
-        const textareaEl = document.getElementById(`edit-textarea-${id}`);
+    // 1. 精準抓取剛剛在 editMsg 裡生出來的那個實體輸入框元件
+    const textareaEl = document.getElementById(`edit-textarea-${id}`);
 
-        // 🍞 麵包屑 2：測試有沒有成功抓到那個實體元件盒子
-        console.log("2222 系統回報：抓到的輸入框元件是:", textareaEl);
+    // 🍞 麵包屑 2：測試有沒有成功抓到那個實體元件盒子
+    console.log("2222 系統回報：抓到的輸入框元件是:", textareaEl);
 
-        // 2. 提領出使用者在輸入框裡敲下的最新文字內容
-        const val = textareaEl?.value;
+    // 2. 提領出使用者在輸入框裡敲下的最新文字內容
+    const val = textareaEl?.value;
 
-        // 🍞 麵包屑 3：測試有沒有成功拿到裡面的字字串
-        console.log("3333 系統回報：準備送出的最新文字是:", val);
+    // 🍞 麵包屑 3：測試有沒有成功拿到裡面的字字串
+    console.log("3333 系統回報：準備送出的最新文字是:", val);
 
-        if (!val) {
-            console.log("⚠️ 守門員警告：因為沒抓到文字（可能為空），程式在此處被強行阻斷攔停！");
-            return; // 安全機制：萬一沒輸入內容就直接退出
+    if (!val) {
+        console.log("⚠️ 守門員警告：因為沒抓到文字（可能為空），程式在此處被強行阻斷攔停！");
+        return; // 安全機制：萬一沒輸入內容就直接退出
+    }   
+    
+    // 3. 發送非同步請求給後端
+    fetch(`/messages/${id}`, {
+        method: 'PATCH', // 使用 PATCH 方法進行局部更新
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+        },
+        body: JSON.stringify({ content: val }) // 將新文字打包成 JSON 傳送
+    }).then(r =>{ 
+        // 🍞 麵包屑 4：測試網路有沒有回應，以及有沒有過關（例如 200 或 419）
+        console.log("4444 系統回報：網路有了回應！原始回應狀態碼是:", r.status);
+        return r.json();
+    })    
+    .then(d => {
+        // 🍞 麵包屑 5：測試解碼後的 Laravel Response 資料包長怎樣
+        console.log("5555 系統回報：後端解碼後的 JSON 資料是:", d);
 
-        }   
-        // 3. 發送非同步請求給後端
-        fetch(`/messages/${id}`, {
-            method: 'PATCH', // 使用 PATCH 方法進行局部更新
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
-            },
-            body: JSON.stringify({ content: val }) // 將新文字打包成 JSON 傳送
-        }).then(r =>{ 
-            // 🍞 麵包屑 4：測試網路有沒有回應，以及有沒有過關（例如 200 或 419）
-            console.log("4444 系統回報：網路有了回應！原始回應狀態碼是:", r.status);
-            return r.json();
-        })    
-        .then(d => {
-            // 🍞 麵包屑 5：測試解碼後的 Laravel Response 資料包長怎樣
-            console.log("5555 系統回報：後端解碼後的 JSON 資料是:", d);
+        // 5. 判斷後端資料庫是否順利寫入成功
+        if (d.success) {
 
-            // 5. 判斷後端資料庫是否順利寫入成功
-            if (d.success) {
+            // 🛠️ 【核心改造點】：我們不再抓取外層大盒子，也不再呼叫只會處理多媒體的 buildMediaHtml！
+            // 我們拿著精準地圖，直接去網頁上抓出那塊專門用來放留言純文字的舊 <p> 標籤
+            const contentEl = document.getElementById(`content-${id}`);
             
-            // 6. 【核心改造點】精準找出網頁畫面上這整則留言的「最外層舊大盒子」
-            const oldMessageEl = document.getElementById(`msg-${id}`);
-            
-            if (oldMessageEl) {
-                // 7. 將後端送回來的最新留言資料包，丟進繪製大腦，產出全新的 HTML 純文字字串
-                const newHtmlString = buildMediaHtml(d.message || d.data); 
+            if (contentEl) {
+                // 提領出後端剛剛存入資料庫、熱騰騰的最新文字字串
+                const latestText = d.message?.content || d.data?.content || val;
                 
-                // 8. 建立隱形臨時容器，逼瀏覽器將字串塑造成實體 DOM 節點
-                const tempDiv = document.createElement('div');
-                tempDiv.innerHTML = newHtmlString;
-                const newMessageEl = tempDiv.firstElementChild;
+                // 核心微創手術：原地擦掉舊文字，換上經過 escHtml 安全過濾後的最新文字！
+                contentEl.innerHTML = escHtml(latestText);
                 
-                // 9. 核心手術：用新節點在畫面上精準原地覆蓋、抽換掉舊節點！
-                oldMessageEl.replaceWith(newMessageEl);
-                
-                console.log(`訊息 ${id} 原地手術抽換成功！`);
+                console.log(`🎉 訊息 ${id} 原地局部純文字抽換成功！外殼完好，位置絕不移位！`);
             } else {
-                console.log("⚠️ 警告：找不到最外層 msg-id 大盒子，退回傳統整頁刷新重繪模式");
-                // 備用機制：萬一最外層大盒子沒綁好 id="msg-${id}"，則退回原本的全頁重繪
+                console.log("⚠️ 警告：找不到 content-id 文字標籤，退回傳統整頁刷新重繪模式");
+                // 備用機制：萬一畫面上找不到這個文字標籤，才退回原本的全頁重繪
                 loadMessages(true);
             }
             
