@@ -168,14 +168,14 @@
                 console.log(`🔍 偵探報告：準備重繪訊息 ${msgId}，記憶體裡的 content 是: "${msg?.content}", 廣播包裹來的 content 是: "${updatedMsg.content}"`);
 
                 if (msg) {
-                    // 🔒 【安全防線】：只有當後端送來的包裹裡「真的有文字」時才覆蓋它！
-                    // 這樣可以防止後端因為漏傳 content，而把 B 帳號原本畫面的字給洗成空白
-                    if (updatedMsg.content !== undefined && updatedMsg.content !== null) {
-                        msg.content = updatedMsg.content;
-                        console.log(`✅ 成功同步最新文字為: ${updatedMsg.content}`);
-                    } else {
-                        console.warn(`⚠️ 警告：後端送來的包裹裡沒有 content 欄位！為了防止文字蒸發，B 帳號決定保留原本的文字：${msg.content}`);
-                    }
+                    // // 🔒 【安全防線】：只有當後端送來的包裹裡「真的有文字」時才覆蓋它！
+                    // // 這樣可以防止後端因為漏傳 content，而把 B 帳號原本畫面的字給洗成空白
+                    // if (updatedMsg.content !== undefined && updatedMsg.content !== null) {
+                    //     msg.content = updatedMsg.content;
+                    //     console.log(`✅ 成功同步最新文字為: ${updatedMsg.content}`);
+                    // } else {
+                    //     console.warn(`⚠️ 警告：後端送來的包裹裡沒有 content 欄位！為了防止文字蒸發，B 帳號決定保留原本的文字：${msg.content}`);
+                    // }
                     
                     // 更新記憶體中的狀態
                     msg.status = updatedMsg.status;
