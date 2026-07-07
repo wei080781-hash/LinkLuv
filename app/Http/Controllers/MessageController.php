@@ -239,7 +239,7 @@ class MessageController extends Controller
             Cache::forget("messages_feed_page_{$i}");
         }
 
-        broadcast(new \App\Events\MessageStatusUpdated($message))->toOthers();
+        // broadcast(new \App\Events\MessageStatusUpdated($message))->toOthers();
         
         // 【核心改造落點】：我們把原本的 ['success' => true] 改成下面這樣： 
         return response()->json([
