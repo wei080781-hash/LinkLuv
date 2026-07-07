@@ -203,7 +203,7 @@ class MessageController extends Controller
     $message->delete();
 
     // 廣播通知所有人即時移除這則訊息
-    // broadcast(new \App\Events\MessageDeleted($messageId))->toOthers();
+    broadcast(new \App\Events\MessageDeleted($messageId))->toOthers();
 
     for ($i = 1; $i <= 10; $i++) {
         Cache::forget("messages_feed_page_{$i}");
@@ -239,7 +239,7 @@ class MessageController extends Controller
             Cache::forget("messages_feed_page_{$i}");
         }
 
-        // broadcast(new \App\Events\MessageStatusUpdated($message))->toOthers();
+        broadcast(new \App\Events\MessageStatusUpdated($message))->toOthers();
         
         // 【核心改造落點】：我們把原本的 ['success' => true] 改成下面這樣： 
         return response()->json([

@@ -614,7 +614,30 @@
                     const preview = document.getElementById(`fprev-${msgId}`);
                     if (preview) preview.innerHTML = '';
                 }
-                handleNewMessage(d.data);
+                // handleNewMessage(d.data);
+                // 新增的內容的內容
+                const newMsg = d.data;
+                newMsg.id = Number(newMsg.id);
+                newMsg.parent_id = newMsg.parent_id == null ? null : Number(newMsg.parent_id);
+                newMsg.children = newMsg.children || [];
+
+                // 不管 Map 裡有沒有，直接更新
+                window.globalMsgMap.set(newMsg.id, newMsg);
+
+                // 把自己加進父層的 children
+                const parentMsg = window.globalMsgMap.get(newMsg.parent_id);
+                if (parentMsg && !parentMsg.children.some(c => c.id === newMsg.id)) {
+                    parentMsg.children.push(newMsg);
+                }
+
+                // 強制重繪根貼文
+                const rootId = findRootId(newMsg.parent_id);
+                window.expandedSet.add(rootId);
+                const rootEl = document.getElementById(`msg-${rootId}`);
+                const rootMsg = window.globalMsgMap.get(rootId);
+                if (rootEl && rootMsg) {
+                    rootEl.outerHTML = buildRootHTML(rootMsg);
+                    }
             }
         })
         .catch(err => {
