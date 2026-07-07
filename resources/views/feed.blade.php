@@ -195,13 +195,14 @@
                     }
                 }
             })
-            
+            // 跟者 function removeMessageLocally(msgId) 去做修改
             .listen('.message.deleted', (e) => {
-                // 即時從畫面移除被刪除的訊息
+                console.log("🚨 收到他人刪除訊息的廣播包裹：", e);
                 const msgId = Number(e.messageId);
-                const el = document.getElementById(`msg-${msgId}`);
-                if (el) el.remove();
-                window.globalMsgMap.delete(msgId);
+                if (msgId) {
+                    // 🔥 呼叫全新微創手術工具，精準清除記憶體並原地重繪大卡片！
+                    removeMessageLocally(msgId);
+                }
             });
     }
 
@@ -256,6 +257,46 @@
             current = window.globalMsgMap.get(current.parent_id);
         }
         return current ? current.id : parentId;
+    }
+
+    // =========================================================
+    // 💡 【全新微創手術工具】：原地精準刪除記憶體與重繪父卡片
+    // =========================================================
+    function removeMessageLocally(msgId) {
+        msgId = Number(msgId);
+        const msg = window.globalMsgMap.get(msgId);
+
+        // 1. 如果在記憶體地圖找不到，至少先把畫面的實體 HTML 刪掉
+        const el = document.getElementById(`msg-${msgId}`);
+        if (el) el.remove();
+
+        if (!msg) return;
+
+        const parentId = msg.parent_id;
+
+        // 2. 從全域 Map 中除名
+        window.globalMsgMap.delete(msgId);
+
+        // 3. 關鍵核心：如果有父層，必須去父層的 children 陣列裡把它徹底剔除！
+        if (parentId) {
+            const parentMsg = window.globalMsgMap.get(parentId);
+            if (parentMsg && parentMsg.children) {
+                // 用 filter 把被刪除的這條 ID 濾掉，記憶體陣列長度正式 -1
+                parentMsg.children = parentMsg.children.filter(c => Number(c.id) !== msgId);
+            }
+
+            // 4. 找到最頂層的根貼文卡片 ID
+            const rootId = findRootId(parentId);
+            const rootEl = document.getElementById(`msg-${rootId}`);
+            const rootMsg = window.globalMsgMap.get(rootId);
+
+            // 5. 原地重新渲染整張大卡片！
+            // 這樣回覆數量、頭像延伸的灰線、展開收闔按鈕，會因為陣列長度變短而「自動精準重新計算」！
+            if (rootEl && rootMsg) {
+                rootEl.outerHTML = buildRootHTML(rootMsg);
+                console.log(`♻️ 留言 ${msgId} 刪除成功，根貼文 ${rootId} 完成原地微創重繪，按鈕與數量已完美同步！`);
+            }
+        }
     }
 
     // =========================================================
@@ -700,7 +741,11 @@
             method: 'DELETE',
             headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }
         }).then(r => r.json()).then(d => {
-            if (d.success) loadMessages(true);
+            // 跟者 function removeMessageLocally(msgId) 去做修改
+            if (d.success) {
+                // 🔥 告別 loadMessages(true)！改用原地移除，畫面絕不跳動、絕不跑位！
+                removeMessageLocally(id);
+            }
         });
     };
 
