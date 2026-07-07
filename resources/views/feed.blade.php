@@ -250,6 +250,7 @@
     // 5. 輔助函式：回溯找出根貼文 ID
     // =========================================================
     function findRootId(parentId) {
+        parentId = Number(parentId); // ← 加這行
         let current = window.globalMsgMap.get(parentId);
         while (current && current.parent_id) {
             current = window.globalMsgMap.get(current.parent_id);
