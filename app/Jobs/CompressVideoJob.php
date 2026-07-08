@@ -39,8 +39,8 @@ public function handle()
         // 原始檔案的絕對路徑 (Ubuntu 本地端)
         $fullPath = storage_path('app/public/' . $originalPath);
         if (!file_exists($fullPath)) {
-        \Log::error("影片壓縮失敗：找不到原始檔案 - " . $fullPath);
-        return;
+            \Log::error("影片壓縮失敗：找不到原始檔案 - " . $fullPath);
+            return;
         }
 
         // 本地壓縮暫存路徑
@@ -50,7 +50,7 @@ public function handle()
         $video = $ffmpeg->open($fullPath);
 
         // 🚀 修正 1：改用 X264() 空建構子，手動指名 'aac'，避開 libmp3lame 崩潰
-        $format = new X264();
+        $format = new \FFMpeg\Format\Video\X264();
         $format->setAudioCodec('aac');
         $format->setVideoCodec('libx264');
         $format->setKiloBitrate(1000);
@@ -65,14 +65,15 @@ public function handle()
 
         // 🚀 修正 2：關鍵！將壓好的影片檔案「上傳至 AWS S3」
         if (file_exists($localCompressedPath)) {
-            $fileContents = file_get_contents($localCompressedPath);
+            // ✅ 解法：改用 fopen 開啟「串流 (Stream)」通道上傳。
+                $fileStream = fopen($localCompressedPath, 'r');
             
             // 丟上 S3 磁碟
             // ✅ 修正後的新寫法（上傳同時強制蓋上「公開」印章）
-            Storage::disk('s3')->put($s3Key, $fileContents, [
-                'visibility' => 'public',
-                'ACL' => 'public-read',
-            ]);
+            \Illuminate\Support\Facades\Storage::disk('s3')->put($s3Key, $fileStream, 'public'); 
+                if (is_resource($fileStream)) {
+                    fclose($fileStream);
+            };
 
             // 3. 更新資料庫中的影片網址為 S3 的路徑
             $this->message->update([
@@ -80,19 +81,23 @@ public function handle()
                 'status'     => 'ready',
             ]);
 
+
+            // ✅ 修正 3：在廣播前，重新從資料庫刷新這則訊息，確保它帶有最新的 media_type 與 user 關聯！
+                // 這樣前一個步驟改的 MessageStatusUpdated 廣播包裹就不會漏資料了。
+                $this->message->refresh();
+                $this->message->loadMissing('user');
+
             // 廣播通知前端影片已就緒
             broadcast(new \App\Events\MessageStatusUpdated($this->message));
 
             // ✅ 加這行，清除快取讓前端拿到新資料
             for ($i = 1; $i <= 10; $i++) {
-                \Cache::forget("messages_feed_page_{$i}");
+                \Illuminate\Support\Facades\Cache::forget("messages_feed_page_{$i}");
             }
 
             // 🚀 修正 3：擦乾淨屁股，刪除 Ubuntu 本地硬碟的「原始片」與「壓縮片」
-            Storage::disk('public')->delete($originalPath); // 刪除原始檔
-            if (file_exists($localCompressedPath)) {
-                unlink($localCompressedPath); // 刪除本地壓縮暫存檔
-            }
+            \Illuminate\Support\Facades\Storage::disk('public')->delete($originalPath);
+            @unlink($localCompressedPath);
         } else {
             throw new \Exception("本地壓縮檔案生成失敗，無法上傳 S3");
         }
@@ -103,6 +108,8 @@ public function handle()
         $this->message->update(['status' => 'failed']);
         
         // 3. 🔥 立刻廣播給所有人，讓大家的轉圈圈瞬間變成「⚠️ 影片轉檔失敗，請重新上傳」
+        $this->message->refresh();
+        $this->message->loadMissing('user');
         broadcast(new \App\Events\MessageStatusUpdated($this->message));
 
         throw $e; // 讓 queue 記錄為失敗，方便開 Tinker 查 

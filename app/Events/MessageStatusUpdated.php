@@ -39,6 +39,7 @@ class MessageStatusUpdated implements ShouldBroadcast
                 'status'     => $this->message->status,
                 'video_path' => $this->message->video_path,
                 'created_at' => $this->message->created_at ? $this->message->created_at->toIso8601String() : null,
+                'media_type' => $this->message->media_type,
                 // 💡 補上完整的 user 關聯包裹，重繪時頭像與名字絕不噴錯崩潰！
                 'user' => [
                     'name'              => $this->message->user?->name ?? '未知用戶',
