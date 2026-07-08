@@ -70,7 +70,7 @@ public function handle()
             
             // 丟上 S3 磁碟
             // ✅ 修正後的新寫法（上傳同時強制蓋上「公開」印章）
-            \Illuminate\Support\Facades\Storage::disk('s3')->put($s3Key, $fileStream, 'public'); 
+            \Illuminate\Support\Facades\Storage::disk('s3')->put($s3Key, $fileStream);
                 if (is_resource($fileStream)) {
                     fclose($fileStream);
             };

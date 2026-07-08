@@ -59,10 +59,10 @@ return [
             'use_path_style_endpoint' => false,
             'throw' => true,
             'report' => false,
-            'visibility' => 'public',
-	        'options' => [
-               'visibility' => 'public',
-            ],
+            // 'visibility' => 'public',
+	        // 'options' => [
+            //    'visibility' => 'public',
+            // ],
        ],
 
     ],
