@@ -107,7 +107,7 @@ class MessageController extends Controller
 
         // 2. 加上這一行：把訊息丟進大聲公廣播出去！
         // .toOthers() 很重要，它能確保「發文者自己」不會重複收到這則推播
-        broadcast(new MessageStatusUpdated($message))->toOthers();
+        broadcast(new MessageStatusUpdated($message));
 
         // 更新物化路徑 (Materialized Path)
         $paddedId = str_pad($message->id, 10, '0', STR_PAD_LEFT);
