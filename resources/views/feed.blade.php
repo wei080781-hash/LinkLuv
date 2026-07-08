@@ -551,7 +551,7 @@
                 </div>`;
             }
             // 💡 【雙重防線】：只有當狀態明確是 ready，且路徑格式正確時，才走 S3 網址！
-            const isS3 = (msg.status === 'ready') && (msg.video_path.startsWith('videos/') || !msg.video_path.startsWith('storage/')); [cite: 112]
+            const isS3 = (msg.status === 'ready') && (msg.video_path.startsWith('videos/') || !msg.video_path.startsWith('storage/'));
             const videoUrl = isS3 ? `${s3BaseUrl}${msg.video_path}` : `/storage/${msg.video_path}`;
             return `<div class="msg-media"><video controls preload="metadata"><source src="${videoUrl}" type="video/mp4">您的瀏覽器不支援影片播放。</video></div>`;
         }
