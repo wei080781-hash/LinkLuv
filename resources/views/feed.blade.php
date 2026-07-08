@@ -340,7 +340,7 @@
             const savedChildren = existing.children || [];
 
             // 💡 原地覆蓋屬性，絕對不要換掉物件的記憶體指標（Reference）！
-            Object.assign(existing, msg, { id: msgId });
+            Object.assign(existing, msg, { id: msg.id });
             existing.children = savedChildren;
         }
         if (msg.children && msg.children.length > 0) {
@@ -769,8 +769,20 @@
         p.innerHTML = `<textarea id="edit-textarea-${id}" rows="2" class="w-full text-sm border border-gray-300 rounded-lg p-2 resize-none">${orig}</textarea>
             <div class="flex gap-2 mt-1">
                 <button onclick="saveEdit(${id})" class="text-xs bg-blue-500 text-white px-3 py-1 rounded-lg border-none cursor-pointer">儲存</button>
-                <button onclick="loadMessages(true)" class="text-xs bg-gray-200 text-gray-700 px-3 py-1 rounded-lg border-none cursor-pointer">取消</button>
+                <button onclick="cancelEdit(${id})" class="text-xs bg-gray-200 text-gray-700 px-3 py-1 rounded-lg border-none cursor-pointer">取消</button>
             </div>`;
+    };
+
+    window.cancelEdit = function(id) {
+    const p = document.getElementById(`content-${id}`);
+    if (!p) return;
+
+    // 💡 核心魔法：直接從全域 Map 裡抓出這則留言原本的文字內容
+    const msg = window.globalMsgMap.get(id);
+    const originalText = msg ? msg.content : '';
+
+    // 💡 原地將輸入框換回原本的純文字，完全不驚動後端，畫面絕不跳動！
+    p.innerHTML = escHtml(originalText);
     };
 
     window.saveEdit = function(id) {
