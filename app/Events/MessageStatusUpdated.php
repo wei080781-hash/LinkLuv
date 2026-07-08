@@ -38,6 +38,7 @@ class MessageStatusUpdated implements ShouldBroadcast
                 'media_type' => $this->message->media_type, // 💡 這一行一定要有，否則前端 buildMediaHtml 會進不去 video 判斷！
                 'status'     => $this->message->status,
                 'video_path' => $this->message->video_path,
+                'image_path' => $this->message->image_path,
                 'created_at' => $this->message->created_at ? $this->message->created_at->toIso8601String() : null,
                 'media_type' => $this->message->media_type,
                 // 💡 補上完整的 user 關聯包裹，重繪時頭像與名字絕不噴錯崩潰！

@@ -125,7 +125,7 @@ class MessageController extends Controller
         if ($parentId) {
             $this->storeClosure($message->id, $parentId);
         } else {
-            DB::table('message_closure')->insert(['ancestor' => $message->id, 'descendant' => $message->id]);
+            \Illuminate\Support\Facades\DB::table('message_closure')->insert(['ancestor' => $message->id, 'descendant' => $message->id]);
         }
 
         // 若為影片，啟動背景壓縮任務
@@ -138,7 +138,7 @@ class MessageController extends Controller
 
         // 清除快取並回傳
         for ($i = 1; $i <= 10; $i++) {
-            Cache::forget("messages_feed_page_{$i}");
+            \Illuminate\Support\Facades\Cache::forget("messages_feed_page_{$i}");
         } 
 
         // 💡【本次新增的核心邏輯】
@@ -149,6 +149,13 @@ class MessageController extends Controller
         $message->likes_count = 0;
         $message->is_liked = false;
         $message->parent_user_name = $message->parent?->user?->name ?? null;
+        // 讓 B 帳號的前端收到後，能「無中生有」把這張新卡片畫到畫面上（此時影片狀態是 processing，前端會畫出轉圈圈）
+        broadcast(new \App\Events\MessageCreated($message))->toOthers();
+        // 4. 如果是影片，才丟進背景佇列進行壓縮轉檔
+        if ($mediaType === 'video') {
+            \App\Jobs\CompressVideoJob::dispatch($message);
+        }
+        // 5. 回傳給發文者 (A帳號) 本人
         return response()->json(['success' => true, 'data' => $message]);
     }
 
