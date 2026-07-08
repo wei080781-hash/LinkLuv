@@ -154,6 +154,7 @@
         window.Echo.channel('wall-channel')
             .listen('.message.created', (e) => {
                 console.log("收到廣播包裹了！", e);
+                window.globalMsgMap.set(Number(e.message.id), e.message);
                 handleNewMessage(e.message);
             })
             .listen('.message.status.updated', (e) => {
@@ -162,39 +163,35 @@
 
                 const updatedMsg = e.message;
                 const msgId = Number(updatedMsg.id);
+                // 確保記憶體中已經有這則訊息，沒有的話必須立刻從包裹建立一個
+                if (!window.globalMsgMap.has(msgId)) {
+                    window.globalMsgMap.set(msgId, updatedMsg);
+                }
+
                 const msg = window.globalMsgMap.get(msgId);
 
                 // 🔥 【偵探追蹤器】：這是重繪前的最後檢查
                 console.log(`🔍 偵探報告：準備重繪訊息 ${msgId}，記憶體裡的 content 是: "${msg?.content}", 廣播包裹來的 content 是: "${updatedMsg.content}"`);
 
                 if (msg) {
-                    // // 🔒 【安全防線】：只有當後端送來的包裹裡「真的有文字」時才覆蓋它！
-                    // // 這樣可以防止後端因為漏傳 content，而把 B 帳號原本畫面的字給洗成空白
-                    // if (updatedMsg.content !== undefined && updatedMsg.content !== null) {
-                    //     msg.content = updatedMsg.content;
-                    //     console.log(`✅ 成功同步最新文字為: ${updatedMsg.content}`);
-                    // } else {
-                    //     console.warn(`⚠️ 警告：後端送來的包裹裡沒有 content 欄位！為了防止文字蒸發，B 帳號決定保留原本的文字：${msg.content}`);
-                    // }
-                    
-                    // 更新記憶體中的狀態
-                    msg.status = updatedMsg.status;
-                    msg.video_path = updatedMsg.video_path;
+                // 執行全量更新：只要後端傳來的欄位，全部覆蓋記憶體，確保資料一致性
+                Object.assign(msg, updatedMsg);
+                
+                console.log(`✅ 已完成記憶體同步，目前內容為: "${msg.content}"`);
 
-                    // 找到根貼文並重繪
-                    const rootId = msg.parent_id ? findRootId(msg.parent_id) : msgId;
+                // 找到根貼文並重繪
+                const rootId = msg.parent_id ? findRootId(msg.parent_id) : msgId;
+                window.expandedSet.add(rootId);
 
-                    // 把根貼文 ID 鎖定在展開名單中，防止重繪時卡片突然折疊收合
-                    window.expandedSet.add(rootId);
-
-                    const rootEl = document.getElementById(`msg-${rootId}`);
-                    const rootMsg = window.globalMsgMap.get(rootId);
-                    if (rootEl && rootMsg) {
-                        rootEl.outerHTML = buildRootHTML(rootMsg);
-                        console.log(`🤖 Echo 成功除錯：B 帳號已在背景將訊息 ${msgId} 的記憶體補完並完成全自動重繪！`);
-                    }
+                const rootEl = document.getElementById(`msg-${rootId}`);
+                const rootMsg = window.globalMsgMap.get(rootId);
+                
+                if (rootEl && rootMsg) {
+                    rootEl.outerHTML = buildRootHTML(rootMsg);
+                    console.log(`🤖 Echo 除錯：訊息 ${msgId} 已成功完成重繪！`);
                 }
-            })
+            }
+        })
             // 跟者 function removeMessageLocally(msgId) 去做修改
             .listen('.message.deleted', (e) => {
                 console.log("🚨 收到他人刪除訊息的廣播包裹：", e);

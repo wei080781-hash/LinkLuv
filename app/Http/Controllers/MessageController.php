@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 use App\Models\Message;
 use App\Jobs\CompressVideoJob;
 use App\Events\MessageStatusUpdated;
+use App\Events\MessageCreated;
 
 class MessageController extends Controller
 {
