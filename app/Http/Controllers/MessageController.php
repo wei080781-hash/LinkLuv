@@ -103,11 +103,13 @@ class MessageController extends Controller
             'video_path' => ($mediaType === 'video') ? $mediaPath : null,
             'media_type' => $mediaType,
             'depth'      => $depth,
+            // 🔥 【核心亮點】動態判斷狀態：如果是影片就設為處理中(processing)，其他（純文字/圖片）就是 ready
+            'status'     => ($mediaType === 'video') ? 'processing' : 'ready',
         ]);
 
         // 2. 加上這一行：把訊息丟進大聲公廣播出去！
         // .toOthers() 很重要，它能確保「發文者自己」不會重複收到這則推播
-        broadcast(new MessageStatusUpdated($message));
+        broadcast(new MessageStatusUpdated($message))->toOthers();
 
         // 更新物化路徑 (Materialized Path)
         $paddedId = str_pad($message->id, 10, '0', STR_PAD_LEFT);
@@ -129,6 +131,8 @@ class MessageController extends Controller
         // 若為影片，啟動背景壓縮任務
         if ($mediaType === 'video') {
             $message->update(['status' => 'processing']);
+            // 使用 ->toOthers() 可以完美排除正在操作上傳的 A 帳號，避免 A 帳號畫面打架
+            broadcast(new \App\Events\MessageStatusUpdated($message))->toOthers();
             CompressVideoJob::dispatch($message);
         }
 

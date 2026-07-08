@@ -340,7 +340,7 @@
             const savedChildren = existing.children || [];
 
             // 💡 原地覆蓋屬性，絕對不要換掉物件的記憶體指標（Reference）！
-            Object.assign(existing, msg, { id: msg.id });
+            Object.assign(existing, msg);
             existing.children = savedChildren;
         }
         if (msg.children && msg.children.length > 0) {

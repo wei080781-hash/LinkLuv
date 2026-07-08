@@ -98,6 +98,13 @@ public function handle()
         }
     } catch (\Exception $e) {
         \Log::error('影片壓縮或上傳 S3 失敗：' . $e->getMessage());
+
+        // 2. 更新資料庫狀態為失敗
+        $this->message->update(['status' => 'failed']);
+        
+        // 3. 🔥 立刻廣播給所有人，讓大家的轉圈圈瞬間變成「⚠️ 影片轉檔失敗，請重新上傳」
+        broadcast(new \App\Events\MessageStatusUpdated($this->message));
+
         throw $e; // 讓 queue 記錄為失敗，方便開 Tinker 查 
     }
 
