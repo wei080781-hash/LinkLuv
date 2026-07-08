@@ -335,7 +335,13 @@
             window.globalMsgMap.set(msg.id, { ...msg, children: [] });
         } else {
             const existing = window.globalMsgMap.get(msg.id);
-            window.globalMsgMap.set(msg.id, { ...msg, children: existing.children });
+            
+            // 💡 【鐵壁修正】：保留原本辛辛苦苦建立的 children 關係鏈
+            const savedChildren = existing.children || [];
+
+            // 💡 原地覆蓋屬性，絕對不要換掉物件的記憶體指標（Reference）！
+            Object.assign(existing, msg, { id: msgId });
+            existing.children = savedChildren;
         }
         if (msg.children && msg.children.length > 0) {
             msg.children.forEach(child => indexToMap(child));
@@ -544,8 +550,8 @@
                     ⚠️ 影片轉檔失敗，請重新上傳
                 </div>`;
             }
-            // status === 'ready'：正常顯示播放器
-            const isS3 = msg.video_path.startsWith('videos/') || !msg.video_path.startsWith('storage/');
+            // 💡 【雙重防線】：只有當狀態明確是 ready，且路徑格式正確時，才走 S3 網址！
+            const isS3 = (msg.status === 'ready') && (msg.video_path.startsWith('videos/') || !msg.video_path.startsWith('storage/')); [cite: 112]
             const videoUrl = isS3 ? `${s3BaseUrl}${msg.video_path}` : `/storage/${msg.video_path}`;
             return `<div class="msg-media"><video controls preload="metadata"><source src="${videoUrl}" type="video/mp4">您的瀏覽器不支援影片播放。</video></div>`;
         }
