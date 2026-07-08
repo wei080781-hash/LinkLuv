@@ -526,7 +526,6 @@
 
     function buildMediaHtml(msg) {
         const s3BaseUrl = 'https://linkluv-media-bucket.s3.ap-east-2.amazonaws.com/';
-
         if (msg.media_type === 'image' && msg.image_path) {
             const isS3 = msg.image_path.startsWith('images/') || !msg.image_path.startsWith('storage/');
             const imgUrl = isS3 ? `${s3BaseUrl}${msg.image_path}` : `/storage/${msg.image_path}`;
@@ -534,26 +533,29 @@
         }
 
         if (msg.media_type === 'video' && msg.video_path) {
-            // 影片還在壓縮中：顯示轉圈提示
-            if (msg.status === 'processing') {
-                return `<div class="msg-media flex items-center gap-2 mt-2 text-xs text-gray-400">
-                    <svg class="animate-spin w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-                    </svg>
-                    影片處理中，完成後將自動顯示...
-                </div>`;
+            // ✅ 【第一道防線】：只有明確是 ready 狀態，才渲染播放器讀取 S3
+            if (msg.status === 'ready') {
+                const isS3 = msg.video_path.startsWith('videos/') || !msg.video_path.startsWith('storage/');
+                const videoUrl = isS3 ? `${s3BaseUrl}${msg.video_path}` : `/storage/${msg.video_path}`;
+                return `<div class="msg-media"><video controls preload="metadata"><source src="${videoUrl}" type="video/mp4">您的瀏覽器不支援影片播放。</video></div>`;
             }
-            // 壓縮失敗：顯示錯誤提示
+            
+            // ✅ 【第二道防線】：壓縮失敗，顯示錯誤提示
             if (msg.status === 'failed') {
                 return `<div class="msg-media flex items-center gap-2 mt-2 text-xs text-red-400">
                     ⚠️ 影片轉檔失敗，請重新上傳
                 </div>`;
             }
-            // 💡 【雙重防線】：只有當狀態明確是 ready，且路徑格式正確時，才走 S3 網址！
-            const isS3 = msg.video_path.startsWith('videos/') || !msg.video_path.startsWith('storage/');
-            const videoUrl = isS3 ? `${s3BaseUrl}${msg.video_path}` : `/storage/${msg.video_path}`;
-            return `<div class="msg-media"><video controls preload="metadata"><source src="${videoUrl}" type="video/mp4">您的瀏覽器不支援影片播放。</video></div>`;
+            
+            // ✅ 【第三道防線】：其餘任何初始狀態（包含剛送出時的 pending, processing, null 或 undefined）
+            // 一律顯示轉圈中，絕對不提前去抓還沒上傳好的 S3 檔案！
+            return `<div class="msg-media flex items-center gap-2 mt-2 text-xs text-gray-400">
+                <svg class="animate-spin w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                </svg>
+                影片處理中，完成後將自動顯示...
+           </div>`;
         }
 
         return '';
