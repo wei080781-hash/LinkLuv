@@ -287,5 +287,6 @@ class MessageController extends Controller
          'liked' => $isLiked,
          'likes_count' => $currentLikesCount
     ]);    
-    }   
+    }
+       
 }

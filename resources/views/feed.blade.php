@@ -1,3 +1,4 @@
+
 <x-app-layout>
     <div class="py-12 bg-gray-50 flex-1">
         <div class="max-w-4xl mx-auto px-6">
@@ -95,18 +96,11 @@
         display: block;
         cursor: pointer;
     }
-
-    @keyframes spin {
-        to { transform: rotate(360deg); }
-    }
-    .animate-spin {
-        animation: spin 1s linear infinite;
-    }
     </style>
 
     <script>
     // =========================================================
-    // 1. 全域狀態初始化
+    // 1. 全域狀態初始化（統一用 window，不重複宣告）
     // =========================================================
     window.globalMsgMap = new Map();
     window.expandedSet = new Set();
@@ -120,6 +114,7 @@
     // 2. 頁面載入後統一啟動
     // =========================================================
     document.addEventListener('DOMContentLoaded', () => {
+        // A. 啟動無限滾動觀察器
         const sentinel = document.getElementById('scroll-sentinel');
         const observer = new IntersectionObserver((entries) => {
             if (entries[0].isIntersecting && !isLoading && hasMore) {
@@ -129,12 +124,15 @@
         }, { rootMargin: '0px 0px 100px 0px' });
         observer.observe(sentinel);
 
+        // B. 載入第一頁
         loadMessages();
+
+        // C. 啟動 WebSocket（輪詢等待 Echo 載入）
         initEchoWithRetry();
     });
 
     // =========================================================
-    // 3. WebSocket 初始化
+    // 3. WebSocket 初始化（帶重試機制）
     // =========================================================
     function initEchoWithRetry() {
         let retries = 0;
@@ -153,91 +151,111 @@
     function setupEcho() {
         window.Echo.channel('wall-channel')
             .listen('.message.created', (e) => {
-                console.log("收到廣播包裹了！", e);
-                window.globalMsgMap.set(Number(e.message.id), e.message);
                 handleNewMessage(e.message);
             })
-            .listen('.message.status.updated', (e) => {
-                // 影片壓縮完成，局部更新該則訊息的播放器
-                console.log("🚨 【NIKKI 導師雷達】收到狀態更新包裹了！完整的 e 裡面長這樣：", e);
 
-                const updatedMsg = e.message;
-                const msgId = Number(updatedMsg.id);
-                // 確保記憶體中已經有這則訊息，沒有的話必須立刻從包裹建立一個
-                if (!window.globalMsgMap.has(msgId)) {
-                    window.globalMsgMap.set(msgId, updatedMsg);
-                }
-
-                const msg = window.globalMsgMap.get(msgId);
-
-                // 🔥 【偵探追蹤器】：這是重繪前的最後檢查
-                console.log(`🔍 偵探報告：準備重繪訊息 ${msgId}，記憶體裡的 content 是: "${msg?.content}", 廣播包裹來的 content 是: "${updatedMsg.content}"`);
-
-                if (msg) {
-                // 執行全量更新：只要後端傳來的欄位，全部覆蓋記憶體，確保資料一致性
-                Object.assign(msg, updatedMsg);
-                
-                console.log(`✅ 已完成記憶體同步，目前內容為: "${msg.content}"`);
-
-                // 找到根貼文並重繪
-                const rootId = msg.parent_id ? findRootId(msg.parent_id) : msgId;
-                window.expandedSet.add(rootId);
-
-                const rootEl = document.getElementById(`msg-${rootId}`);
-                const rootMsg = window.globalMsgMap.get(rootId);
-                
-                if (rootEl && rootMsg) {
-                    rootEl.outerHTML = buildRootHTML(rootMsg);
-                    console.log(`🤖 Echo 除錯：訊息 ${msgId} 已成功完成重繪！`);
-                }
-            }
-        })
-            // 跟者 function removeMessageLocally(msgId) 去做修改
-            .listen('.message.deleted', (e) => {
-                console.log("🚨 收到他人刪除訊息的廣播包裹：", e);
-                const msgId = Number(e.messageId);
-                if (msgId) {
-                    // 🔥 呼叫全新微創手術工具，精準清除記憶體並原地重繪大卡片！
-                    removeMessageLocally(msgId);
-                }
-            });
+            .listen('.message.liked', (e) => {
+            handleLikeBroadcast(e);
+        });    
     }
+
+
+    window.handleLikeBroadcast = function(e) {
+    console.log("📡 [雷達成功攔截廣播] 收到別人的點讚訊號！包裹內容：", e);
+    
+    // 1. 解析目標 ID
+    const targetId = Number(e.messageId ?? e.id);
+    
+    // 2. 升級改用 ?? 運算子，精準攔截數字 0
+    const newCount = Number(e.likesCount ?? e.likes_count ?? 0);
+    
+    console.log(`[探針測試] 經過 ?? 判定後的 newCount 理論數值為: ${newCount}`);
+    
+    // 3. 同步中央記憶體
+    if (window.globalMsgMap.has(targetId)) {
+        const msg = window.globalMsgMap.get(targetId);
+        msg.likes_count = newCount;
+        console.log(`[記憶體同步] 已將地圖中的 ID: ${targetId} 讚數修正為: ${newCount}`);
+    }
+    
+    // 4. 精準抹繪網頁 DOM 數字
+    const countEl = document.getElementById(`lcount-${targetId}`);
+    if (countEl) {
+            countEl.textContent = newCount;
+            console.log(`[DOM 抹繪] 已成功將網頁上的計數器更新為: ${newCount}`);
+        }
+    };
 
     // =========================================================
     // 4. 統一處理新訊息入口
+    //    WebSocket、submitPost、submitReply 全部走這裡
     // =========================================================
+    
     window.handleNewMessage = function(newMsg) {
-        console.log("🛠️ 正在渲染的新訊息內容:", newMsg);
+        console.log("★★★★ 我改過 handleNewMessage 了 ★★★★");
         newMsg.id = Number(newMsg.id);
-        newMsg.parent_id = newMsg.parent_id == null ? null : Number(newMsg.parent_id);
+        newMsg.parent_id =
+        newMsg.parent_id == null
+            ? null
+            : Number(newMsg.parent_id);
+        console.log(typeof newMsg.id);
+        console.log(typeof newMsg.parent_id);
+        console.log(
+        [...window.globalMsgMap.keys()]
+            .slice(0,10)
+            .map(k => [k, typeof k])
+        );
 
+        console.log("parent_id =", newMsg.parent_id);
+
+        // 去重防呆：已存在就跳過
         if (window.globalMsgMap.has(newMsg.id)) return;
 
         newMsg.children = [];
         window.globalMsgMap.set(newMsg.id, newMsg);
 
         if (!newMsg.parent_id) {
+            // 全新貼文：插到最頂端
             const list = document.getElementById('messages-list');
             if (list) list.insertAdjacentHTML('afterbegin', buildRootHTML(newMsg));
+                console.log("===== 插入後 =====");
+                console.log(document.getElementById(`msg-${newMsg.id}`));
+                console.log(document.getElementById('messages-list').innerHTML);
         } else {
+            // 回覆：找到根貼文並局部重繪
+
+            console.log("========== handleNewMessage ==========");
+            console.log("newMsg =", newMsg);
             const rootId = findRootId(newMsg.parent_id);
+            console.log("rootId =", rootId);
             const trueParent = window.globalMsgMap.get(newMsg.parent_id);
+            console.log("trueParent =", trueParent);
             if (trueParent) {
+                console.log("children before =", trueParent.children);
                 if (!trueParent.children) trueParent.children = [];
-                if (!trueParent.children.some(c => c.id === newMsg.id)) {
+                // 檢查是否重複，不重複才塞入
+                if (!trueParent.children.some(c => c.id === newMsg.id)) {    
                     trueParent.children.push(newMsg);
+                    console.log("children after =", trueParent.children);
                 }
             }
-
+            
+            // 強制展開該根貼文的檢視狀態
             window.expandedSet.add(rootId);
+
             const rootEl = document.getElementById(`msg-${rootId}`);
+            console.log("rootEl =", rootEl);
             const rootMsg = window.globalMsgMap.get(rootId);
+            console.log("rootMsg =", rootMsg);
 
             if (rootEl && rootMsg) {
+                // 防護：若使用者正在該卡片內打字，跳過重繪避免焦點丟失
                 const activeInput = rootEl.querySelector('input[name="content"], textarea');
                 const isFocused = activeInput && (document.activeElement === activeInput);
                 const hasTyped = activeInput && activeInput.value.trim() !== '';
+
                 if (!isFocused && !hasTyped) {
+                    // 核心重繪：此時記憶體結構已正確，深層留言將會完美渲染
                     rootEl.outerHTML = buildRootHTML(rootMsg);
                 }
             }
@@ -248,52 +266,11 @@
     // 5. 輔助函式：回溯找出根貼文 ID
     // =========================================================
     function findRootId(parentId) {
-        parentId = Number(parentId); // ← 加這行
         let current = window.globalMsgMap.get(parentId);
         while (current && current.parent_id) {
             current = window.globalMsgMap.get(current.parent_id);
         }
         return current ? current.id : parentId;
-    }
-
-    // =========================================================
-    // 💡 【全新微創手術工具】：原地精準刪除記憶體與重繪父卡片
-    // =========================================================
-    function removeMessageLocally(msgId) {
-        msgId = Number(msgId);
-        const msg = window.globalMsgMap.get(msgId);
-
-        // 1. 如果在記憶體地圖找不到，至少先把畫面的實體 HTML 刪掉
-        const el = document.getElementById(`msg-${msgId}`);
-        if (el) el.remove();
-
-        if (!msg) return;
-
-        const parentId = msg.parent_id;
-
-        // 2. 從全域 Map 中除名
-        window.globalMsgMap.delete(msgId);
-
-        // 3. 關鍵核心：如果有父層，必須去父層的 children 陣列裡把它徹底剔除！
-        if (parentId) {
-            const parentMsg = window.globalMsgMap.get(parentId);
-            if (parentMsg && parentMsg.children) {
-                // 用 filter 把被刪除的這條 ID 濾掉，記憶體陣列長度正式 -1
-                parentMsg.children = parentMsg.children.filter(c => Number(c.id) !== msgId);
-            }
-
-            // 4. 找到最頂層的根貼文卡片 ID
-            const rootId = findRootId(parentId);
-            const rootEl = document.getElementById(`msg-${rootId}`);
-            const rootMsg = window.globalMsgMap.get(rootId);
-
-            // 5. 原地重新渲染整張大卡片！
-            // 這樣回覆數量、頭像延伸的灰線、展開收闔按鈕，會因為陣列長度變短而「自動精準重新計算」！
-            if (rootEl && rootMsg) {
-                rootEl.outerHTML = buildRootHTML(rootMsg);
-                console.log(`♻️ 留言 ${msgId} 刪除成功，根貼文 ${rootId} 完成原地微創重繪，按鈕與數量已完美同步！`);
-            }
-        }
     }
 
     // =========================================================
@@ -332,13 +309,7 @@
             window.globalMsgMap.set(msg.id, { ...msg, children: [] });
         } else {
             const existing = window.globalMsgMap.get(msg.id);
-            
-            // 💡 【鐵壁修正】：保留原本辛辛苦苦建立的 children 關係鏈
-            const savedChildren = existing.children || [];
-
-            // 💡 原地覆蓋屬性，絕對不要換掉物件的記憶體指標（Reference）！
-            Object.assign(existing, msg);
-            existing.children = savedChildren;
+            window.globalMsgMap.set(msg.id, { ...msg, children: existing.children });
         }
         if (msg.children && msg.children.length > 0) {
             msg.children.forEach(child => indexToMap(child));
@@ -370,7 +341,6 @@
     // 7. HTML 建構函式
     // =========================================================
     function buildRootHTML(msg) {
-        console.log(`🎨 正在繪製回覆 ${msg.id}，內容為: "${msg.content}", 圖片路徑為: "${msg.image_path}"`);
         const hasReplies = msg.children && msg.children.length > 0;
         const isOpen = window.expandedSet.has(msg.id);
         const count = msg.children ? msg.children.length : 0;
@@ -528,33 +498,11 @@
             const imgUrl = isS3 ? `${s3BaseUrl}${msg.image_path}` : `/storage/${msg.image_path}`;
             return `<div class="msg-media"><img src="${imgUrl}" onclick="openLightbox('image','${imgUrl}')"></div>`;
         }
-
         if (msg.media_type === 'video' && msg.video_path) {
-            // ✅ 【第一道防線】：只有明確是 ready 狀態，才渲染播放器讀取 S3
-            if (msg.status === 'ready') {
-                const isS3 = msg.video_path.startsWith('videos/') || !msg.video_path.startsWith('storage/');
-                const videoUrl = isS3 ? `${s3BaseUrl}${msg.video_path}` : `/storage/${msg.video_path}`;
-                return `<div class="msg-media"><video controls preload="metadata"><source src="${videoUrl}" type="video/mp4">您的瀏覽器不支援影片播放。</video></div>`;
-            }
-            
-            // ✅ 【第二道防線】：壓縮失敗，顯示錯誤提示
-            if (msg.status === 'failed') {
-                return `<div class="msg-media flex items-center gap-2 mt-2 text-xs text-red-400">
-                    ⚠️ 影片轉檔失敗，請重新上傳
-                </div>`;
-            }
-            
-            // ✅ 【第三道防線】：其餘任何初始狀態（包含剛送出時的 pending, processing, null 或 undefined）
-            // 一律顯示轉圈中，絕對不提前去抓還沒上傳好的 S3 檔案！
-            return `<div class="msg-media flex items-center gap-2 mt-2 text-xs text-gray-400">
-                <svg class="animate-spin w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-                </svg>
-                影片處理中，完成後將自動顯示...
-           </div>`;
+            const isS3 = msg.video_path.startsWith('videos/') || !msg.video_path.startsWith('storage/');
+            const videoUrl = isS3 ? `${s3BaseUrl}${msg.video_path}` : `/storage/${msg.video_path}`;
+            return `<div class="msg-media"><video controls preload="metadata"><source src="${videoUrl}" type="video/mp4">您的瀏覽器不支援影片播放。</video></div>`;
         }
-
         return '';
     }
 
@@ -625,6 +573,7 @@
         }
     };
 
+    // ✅ 完美修正後的 submitReply 函式
     window.submitReply = function(e, rootId) {
         e.preventDefault();
         const form = e.target;
@@ -637,7 +586,9 @@
             return;
         }
 
+        // 防重複點擊鎖定
         if (submitBtn) submitBtn.disabled = true;
+
         const msgId = form.querySelector('input[name="parent_id"]')?.value;
 
         fetch("{{ route('messages.store') }}", {
@@ -647,49 +598,33 @@
         })
         .then(r => {
             if (r.status === 419) {
-                alert('登入已過期，頁面將自動重新整理');
-                window.location.reload();
-                return Promise.reject('419');
-            }
-            return r.json();
-        })
+            alert('登入已過期，頁面將自動重新整理');
+            window.location.reload();
+            return Promise.reject('419');
+        }
+        return r.json();
+    })
         .then(d => {
+            console.log("收到資料：", d);
             if (d.success && d.data) {
+                // 1. 先清空表單，釋放 hasTyped 狀態
                 form.reset();
                 if (msgId) {
                     const preview = document.getElementById(`fprev-${msgId}`);
                     if (preview) preview.innerHTML = '';
                 }
-                // handleNewMessage(d.data);
-                // 新增的內容的內容
-                const newMsg = d.data;
-                newMsg.id = Number(newMsg.id);
-                newMsg.parent_id = newMsg.parent_id == null ? null : Number(newMsg.parent_id);
-                newMsg.children = newMsg.children || [];
+                console.log("開始更新畫面");
+                // 2. 再安全觸發 DOM 重繪
+                handleNewMessage(d.data);
 
-                // 不管 Map 裡有沒有，直接更新
-                window.globalMsgMap.set(newMsg.id, newMsg);
-
-                // 把自己加進父層的 children
-                const parentMsg = window.globalMsgMap.get(newMsg.parent_id);
-                if (parentMsg && !parentMsg.children.some(c => c.id === newMsg.id)) {
-                    parentMsg.children.push(newMsg);
-                }
-
-                // 強制重繪根貼文
-                const rootId = findRootId(newMsg.parent_id);
-                window.expandedSet.add(rootId);
-                const rootEl = document.getElementById(`msg-${rootId}`);
-                const rootMsg = window.globalMsgMap.get(rootId);
-                if (rootEl && rootMsg) {
-                    rootEl.outerHTML = buildRootHTML(rootMsg);
-                    }
+                console.log("更新完成");
             }
         })
         .catch(err => {
-            if (err !== '419') console.error('發送失敗:', err);
+            console.error('發送失敗:', err);
         })
         .finally(() => {
+            // 解鎖按鈕
             if (submitBtn) submitBtn.disabled = false;
         });
     };
@@ -715,12 +650,12 @@
         })
         .then(r => {
             if (r.status === 419) {
-                alert('登入已過期，頁面將自動重新整理');
-                window.location.reload();
-                return Promise.reject('419');
-            }
-            return r.json();
-        })
+            alert('登入已過期，頁面將自動重新整理');
+            window.location.reload();
+            return Promise.reject('419');
+        }
+         return r.json();
+    })
         .then(d => {
             if (d.success && d.data) {
                 form.reset();
@@ -732,9 +667,7 @@
                 form.reset();
             }
         })
-        .catch(err => {
-            if (err !== '419') console.error('貼文失敗:', err);
-        })
+        .catch(err => console.error('貼文失敗:', err))
         .finally(() => {
             if (submitBtn) submitBtn.disabled = false;
         });
@@ -746,172 +679,122 @@
             method: 'DELETE',
             headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }
         }).then(r => r.json()).then(d => {
-            // 跟者 function removeMessageLocally(msgId) 去做修改
-            if (d.success) {
-                // 🔥 告別 loadMessages(true)！改用原地移除，畫面絕不跳動、絕不跑位！
-                removeMessageLocally(id);
-            }
+            if (d.success) loadMessages(true);
         });
     };
 
     window.editMsg = function(id) {
-        
-        // 1. 先精準找出這則留言存放文字內容的舊標籤
         const p = document.getElementById(`content-${id}`);
-        if (!p) return;// 安全機制：萬一找不到就直接退出
-
-        // 2. 備份原本寫在裡面的文字內容
+        if (!p) return;
         const orig = p.innerText;
-
-        // 3. 把原本的文字換成包含 <textarea> 輸入框與按鈕的 HTML 結構
-        // 💡 關鍵修改：我們將輸入框的 ID 統一命名為 `edit-textarea-${id}`，方便儲存時抓取
-        p.innerHTML = `<textarea id="edit-textarea-${id}" rows="2" class="w-full text-sm border border-gray-300 rounded-lg p-2 resize-none">${orig}</textarea>
+        p.innerHTML = `<textarea id="edit-ta-${id}" rows="2" class="w-full text-sm border border-gray-300 rounded-lg p-2 resize-none">${orig}</textarea>
             <div class="flex gap-2 mt-1">
                 <button onclick="saveEdit(${id})" class="text-xs bg-blue-500 text-white px-3 py-1 rounded-lg border-none cursor-pointer">儲存</button>
-                <button onclick="cancelEdit(${id})" class="text-xs bg-gray-200 text-gray-700 px-3 py-1 rounded-lg border-none cursor-pointer">取消</button>
+                <button onclick="loadMessages(true)" class="text-xs bg-gray-200 text-gray-700 px-3 py-1 rounded-lg border-none cursor-pointer">取消</button>
             </div>`;
     };
 
-    window.cancelEdit = function(id) {
-    const p = document.getElementById(`content-${id}`);
-    if (!p) return;
-
-    // 💡 核心魔法：直接從全域 Map 裡抓出這則留言原本的文字內容
-    const msg = window.globalMsgMap.get(id);
-    const originalText = msg ? msg.content : '';
-
-    // 💡 原地將輸入框換回原本的純文字，完全不驚動後端，畫面絕不跳動！
-    p.innerHTML = escHtml(originalText);
-    };
-
     window.saveEdit = function(id) {
-
-    // 🍞 麵包屑 1：測試點擊儲存時，有沒有成功開門進入函式
-    console.log("1111 系統回報：確認成功觸發 saveEdit 函式！傳進來的 ID 是:", id);
-
-    // 1. 精準抓取剛剛在 editMsg 裡生出來的那個實體輸入框元件
-    const textareaEl = document.getElementById(`edit-textarea-${id}`);
-
-    // 🍞 麵包屑 2：測試有沒有成功抓到那個實體元件盒子
-    console.log("2222 系統回報：抓到的輸入框元件是:", textareaEl);
-
-    // 2. 提領出使用者在輸入框裡敲下的最新文字內容
-    const val = textareaEl?.value;
-
-    // 🍞 麵包屑 3：測試有沒有成功拿到裡面的字字串
-    console.log("3333 系統回報：準備送出的最新文字是:", val);
-
-    if (!val) {
-        console.log("⚠️ 守門員警告：因為沒抓到文字（可能為空），程式在此處被強行阻斷攔停！");
-        return; // 安全機制：萬一沒輸入內容就直接退出
-    }   
-    
-    // 3. 發送非同步請求給後端
-    fetch(`/messages/${id}`, {
-        method: 'PATCH', // 使用 PATCH 方法進行局部更新
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
-        },
-        body: JSON.stringify({ content: val }) // 將新文字打包成 JSON 傳送
-    }).then(r =>{ 
-        // 🍞 麵包屑 4：測試網路有沒有回應，以及有沒有過關（例如 200 或 419）
-        console.log("4444 系統回報：網路有了回應！原始回應狀態碼是:", r.status);
-        return r.json();
-    })    
-    .then(d => {
-        // 🍞 麵包屑 5：測試解碼後的 Laravel Response 資料包長怎樣
-        console.log("5555 系統回報：後端解碼後的 JSON 資料是:", d);
-
-        // 5. 判斷後端資料庫是否順利寫入成功
-        if (d.success) {
-
-            // 🛠️ 【核心改造點】：我們不再抓取外層大盒子，也不再呼叫只會處理多媒體的 buildMediaHtml！
-            // 我們拿著精準地圖，直接去網頁上抓出那塊專門用來放留言純文字的舊 <p> 標籤
-            const contentEl = document.getElementById(`content-${id}`);
-            
-            if (contentEl) {
-                // 提領出後端剛剛存入資料庫、熱騰騰的最新文字字串
-                const latestText = d.message?.content || d.data?.content || val;
-                
-                // 核心微創手術：原地擦掉舊文字，換上經過 escHtml 安全過濾後的最新文字！
-                contentEl.innerHTML = escHtml(latestText);
-
-                // ✅ 加這行：同步更新記憶體裡的資料，防止 WebSocket 重繪時蓋掉新內容
-                if (window.globalMsgMap.has(Number(id))) {
-                    window.globalMsgMap.get(Number(id)).content = latestText;
-                }
-                
-                console.log(`🎉 訊息 ${id} 原地局部純文字抽換成功！外殼完好，位置絕不移位！`);
-            } else {
-                console.log("⚠️ 警告：找不到 content-id 文字標籤，退回傳統整頁刷新重繪模式");
-                // 備用機制：萬一畫面上找不到這個文字標籤，才退回原本的全頁重繪
-                loadMessages(true);
-            }
-            
-        } else {
-            alert('修改失敗：' + d.message);
-        }
-    })
-    .catch(err => {
-        console.error('儲存編輯時發生網路錯誤:', err);
-    });
-};
+        const val = document.getElementById(`edit-ta-${id}`)?.value;
+        if (!val) return;
+        fetch(`/messages/${id}`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+            },
+            body: JSON.stringify({ content: val }),
+        }).then(r => r.json()).then(d => {
+            if (d.success) loadMessages(true);
+        });
+    };
 
     window.toggleLike = function(id) {
         id = Number(id);
+        
+        console.log(`[探針 1][點擊觸發] 準備發送點讚請求，目標 ID: ${id}, 型態: ${typeof id}`);
+        // 🚀 直接發送請求，不提前抓取可能變動的 DOM 節點
         fetch(`/messages/${id}/like`, {
             method: 'POST',
             headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }
         })
         .then(r => r.json())
         .then(d => {
-            // fetch 完成後才查詢 DOM，避免重繪導致拿到舊節點
+            console.log(`[探針 2][後端回應抵達] 收到後端回傳物件:`, d);
+
+            // ✅ 收到回應後的最後一刻，才抓取網頁上當下最新、活著的節點
             const btn = document.querySelector(`#msg-${id} .like-btn, [data-id="${id}"] .like-btn`);
             const countEl = document.getElementById(`lcount-${id}`);
 
+            console.log(`[探針 3][DOM 節點盤查]`, {
+            "搜尋目標按鈕": `#msg-${id} .like-btn`,
+            "抓取到的按鈕結果 (btn)": btn,
+            "搜尋目標計數器": `lcount-${id}`,
+            "抓取到的計數器結果 (countEl)": countEl
+            });
+
+            // ✅ 防空檢查：若在等待期間留言被刪除或找不到節點，直接結束不執行，防止程式當機
+            if (!btn || !countEl) {
+                console.warn(`[探針 4][📢 警告 - 程式在此中斷] 原因：在畫面上找不到對應的按鈕或計數器節點！`);
+                return;
+            }
+
             if (d.likes_count !== undefined) {
-                if (countEl) countEl.textContent = d.likes_count;
-                if (btn) {
-                    if (d.is_liked) {
-                        btn.classList.add('text-pink-500', 'font-bold');
-                        btn.classList.remove('text-gray-400');
-                    } else {
-                        btn.classList.remove('text-pink-500', 'font-bold');
-                        btn.classList.add('text-gray-400');
-                    }
+
+                console.log(`[探針 5][執行路線 A] 後端有給數字。準備將計數器改為: ${d.likes_count}, 按鈕點讚狀態: ${d.liked}`);
+
+                countEl.textContent = d.likes_count;
+                if (d.liked) {
+                    btn.classList.add('text-pink-500', 'font-bold');
+                    btn.classList.remove('text-gray-400');
+                } else {
+                    btn.classList.remove('text-pink-500', 'font-bold');
+                    btn.classList.add('text-gray-400');
                 }
+
+                // 同步更新全域記憶體資料，避免下次被 WebSocket 重繪洗掉
                 if (window.globalMsgMap.has(id)) {
+                    console.log(`[探針 5-1] 成功找到 globalMsgMap 中的資料，正在同步記憶體狀態...`);
                     const msg = window.globalMsgMap.get(id);
                     msg.likes_count = d.likes_count;
-                    msg.is_liked = d.is_liked;
+                    msg.is_liked = d.liked;
+                
+                } else {
+                    console.warn(`[探針 5-2][📢 警告] globalMsgMap 裡面竟然找不到 ID: ${id} 的留言！`);
                 }
-            } else {
-                const isLiked = btn && btn.classList.contains('text-pink-500');
-                let count = parseInt(countEl?.textContent) || 0;
-                if (isLiked) {
-                    count = Math.max(0, count - 1);
-                    if (btn) {
+                } else {
+                    // 📡 探針 6：確認走入路線 B (後端沒給數字，前端自立自強模擬)
+                    console.log(`[探針 6][執行路線 B] 後端沒給數字，啟動前端模擬計算`);
+
+                    // 路線 B：後端未回傳數據時的備用前端模擬邏輯
+                    const isLiked = btn.classList.contains('text-pink-500');
+                    let count = parseInt(countEl.textContent) || 0;
+                    if (isLiked) {
+                        count = Math.max(0, count - 1);
                         btn.classList.remove('text-pink-500', 'font-bold');
                         btn.classList.add('text-gray-400');
-                    }
-                } else {
-                    count += 1;
-                    if (btn) {
+                    } else {
+                        count += 1;
                         btn.classList.add('text-pink-500', 'font-bold');
                         btn.classList.remove('text-gray-400');
                     }
-                }
-                if (countEl) countEl.textContent = count;
-                if (window.globalMsgMap.has(id)) {
-                    const msg = window.globalMsgMap.get(id);
-                    msg.likes_count = count;
-                    msg.is_liked = !isLiked;
-                }
+                    countEl.textContent = count;
+
+                    // 同步更新全域記憶體的模擬狀態
+                    if (window.globalMsgMap.has(id)) {
+                        const msg = window.globalMsgMap.get(id);
+                        msg.likes_count = count;
+                        msg.is_liked = !isLiked;
+                    }
             }
+
+            // 📡 探針 7：確認整套點讚邏輯全部執行完畢
+            console.log(`[探針 7][流程圓滿結束] ID: ${id} 的點讚畫面更新動作已全部派發完畢。`);
         })
-        .catch(err => console.error('點讚發送失敗:', err));
-    };
+        .catch(err => {
+        console.error('[探針 8][❌ 嚴重錯誤] 點讚發送失敗，錯誤詳細訊息:', err);
+    });
+};    
 
     window.previewMedia = function(input, previewId) {
         const file = input.files[0];
@@ -965,52 +848,5 @@
         target.classList.add('msg-highlight');
         setTimeout(() => target.classList.remove('msg-highlight'), 1500);
     };
-    // 將你的非同步更新手術功能，完整放入這個 <script> 盒子中
-    function sendUpdateToBackend(messageId) {
-            console.log("1111 系統回報：確認成功觸發 sendUpdateToBackend 函式！傳進來的 ID 是:", messageId);
-            const textareaEl = document.getElementById(`edit-textarea-${messageId}`);
-
-            // 🍞 麵包屑 2：測試有沒有成功抓到那個輸入框元件
-            console.log("2222 系統回報：抓到的輸入框元件是:", textareaEl);
-
-            const newText = textareaEl.value;
-
-            // 🍞 麵包屑 3：測試有沒有成功拿到裡面的字
-            console.log("3333 系統回報：準備送出的最新文字是:", newText);
-
-            fetch(`/messages/${messageId}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-                },
-                body: JSON.stringify({ content: newText })
-            })
-            .then(response => {
-                console.log("4444 系統回報：網路有了回應！原始回應狀態碼是:", response.status);
-                return response.json();
-            })    
-            .then(data => {
-                console.log("5555 系統回報：後端解碼後的 JSON 資料是:", data);
-                if (data.success) {
-                    const oldMessageEl = document.getElementById(`msg-${messageId}`);
-                    const newHtmlString = buildMediaHtml(data.message);
-                    
-                    const tempDiv = document.createElement('div');
-                    tempDiv.innerHTML = newHtmlString;
-                    const newMessageEl = tempDiv.firstElementChild;
-                    
-                    oldMessageEl.replaceWith(newMessageEl);
-                    console.log(`訊息 ${messageId} 原地更新成功！`);
-                } else {
-                    alert('修改失敗：' + data.message);
-                }
-            })
-            .catch(error => {
-                console.error('網路請求發生錯誤：', error);
-            });
-        }
-
-
     </script>
-</x-app-layout>
+</x-app-layout> 
