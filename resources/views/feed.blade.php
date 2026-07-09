@@ -154,9 +154,15 @@
                 handleNewMessage(e.message);
             })
 
+            .listen('.message.status.updated', (e) => {
+                handleNewMessage(e.message);
+            })
+
             .listen('.message.liked', (e) => {
             handleLikeBroadcast(e);
-        });    
+            });
+            
+            
     }
 
 
