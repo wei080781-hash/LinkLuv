@@ -215,7 +215,11 @@
         console.log("parent_id =", newMsg.parent_id);
 
         // 去重防呆：已存在就跳過
-        if (window.globalMsgMap.has(newMsg.id)) return;
+        if (window.globalMsgMap.has(newMsg.id)) {
+            // 這是更新，不是新增
+            // 更新原有訊息的內容
+            return;
+        }
 
         newMsg.children = [];
         window.globalMsgMap.set(newMsg.id, newMsg);
