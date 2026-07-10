@@ -234,7 +234,21 @@
             existing.id = Number(existing.id);
             existing.parent_id = existing.parent_id == null ? null : Number(existing.parent_id);
 
-            window.globalMsgMap.set(merged.id, merged);
+            // 新的
+            // 這裡要加
+            if (existing.parent_id) {
+                const parent = window.globalMsgMap.get(existing.parent_id);
+                if (parent && parent.children) {
+                    const idx = parent.children.findIndex(c => c.id === existing.id);
+                    if (idx !== -1) parent.children[idx] = existing;
+                }
+            }
+            // 舊的
+            // window.globalMsgMap.set(merged.id, merged);
+
+            // 新的
+            window.globalMsgMap.set(existing.id, existing);
+
 
             const contentEl = document.getElementById(`content-${merged.id}`);
             if (contentEl) {
@@ -246,8 +260,10 @@
                     contentEl.innerText = merged.content ?? '';
                 }
             }
-
-            const rootId = findRootId(merged.parent_id ?? merged.id);
+            // 舊的
+            // const rootId = findRootId(merged.parent_id ?? merged.id);
+            // 新的
+            const rootId = findRootId(existing.parent_id ?? existing.id);
             const rootEl = document.getElementById(`msg-${rootId}`);
             const rootMsg = window.globalMsgMap.get(rootId);
 
@@ -287,7 +303,10 @@
                 console.log("children before =", trueParent.children);
                 if (!trueParent.children) trueParent.children = [];
                 // 檢查是否重複，不重複才塞入
-                if (!trueParent.children.some(c => c.id === newMsg.id)) {    
+                // 舊的
+                // if (!trueParent.children.some(c => c.id === newMsg.id)) {
+                // 新的
+                if (!trueParent.children.some(c => c.id === existing.id)) {    
                     trueParent.children.push(newMsg);
                     console.log("children after =", trueParent.children);
                 }
