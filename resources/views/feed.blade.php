@@ -257,7 +257,7 @@
                 const hasTyped = activeInput && activeInput.value.trim() !== '';
 
                 if (!isFocused && !hasTyped) {
-                    contentEl.innerText = merged.content ?? '';
+                    contentEl.innerText = existing.content ?? '';
                 }
             }
             // 舊的
