@@ -249,8 +249,8 @@
             // 新的
             window.globalMsgMap.set(existing.id, existing);
 
-
-            const contentEl = document.getElementById(`content-${merged.id}`);
+            // 舊的是merge.id
+            const contentEl = document.getElementById(`content-${existing.id}`);
             if (contentEl) {
                 const activeInput = contentEl.querySelector('input[name="content"], textarea');
                 const isFocused = activeInput && document.activeElement === activeInput;
