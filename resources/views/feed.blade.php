@@ -218,15 +218,21 @@
         if (window.globalMsgMap.has(newMsg.id)) {
             const existing = window.globalMsgMap.get(newMsg.id);
             const children = existing.children || [];
+            // 舊的
+            // Object.assign(existing, newMsg);
+            //     ...existing,
+            //     ...newMsg,
+            //     children,
+            // };
 
-            const merged = {
-                ...existing,
-                ...newMsg,
-                children,
-            };
+            // merged.id = Number(merged.id);
+            // merged.parent_id = merged.parent_id == null ? null : Number(merged.parent_id);
 
-            merged.id = Number(merged.id);
-            merged.parent_id = merged.parent_id == null ? null : Number(merged.parent_id);
+            // 新的
+            Object.assign(existing, newMsg);
+            existing.children = children;
+            existing.id = Number(existing.id);
+            existing.parent_id = existing.parent_id == null ? null : Number(existing.parent_id);
 
             window.globalMsgMap.set(merged.id, merged);
 
