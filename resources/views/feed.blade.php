@@ -216,8 +216,45 @@
 
         // 去重防呆：已存在就跳過
         if (window.globalMsgMap.has(newMsg.id)) {
-            // 這是更新，不是新增
-            // 更新原有訊息的內容
+            const existing = window.globalMsgMap.get(newMsg.id);
+            const children = existing.children || [];
+
+            const merged = {
+                ...existing,
+                ...newMsg,
+                children,
+            };
+
+            merged.id = Number(merged.id);
+            merged.parent_id = merged.parent_id == null ? null : Number(merged.parent_id);
+
+            window.globalMsgMap.set(merged.id, merged);
+
+            const contentEl = document.getElementById(`content-${merged.id}`);
+            if (contentEl) {
+                const activeInput = contentEl.querySelector('input[name="content"], textarea');
+                const isFocused = activeInput && document.activeElement === activeInput;
+                const hasTyped = activeInput && activeInput.value.trim() !== '';
+
+                if (!isFocused && !hasTyped) {
+                    contentEl.innerText = merged.content ?? '';
+                }
+            }
+
+            const rootId = findRootId(merged.parent_id ?? merged.id);
+            const rootEl = document.getElementById(`msg-${rootId}`);
+            const rootMsg = window.globalMsgMap.get(rootId);
+
+            if (rootEl && rootMsg) {
+                const activeInputRoot = rootEl.querySelector('input[name="content"], textarea');
+                const isFocusedRoot = activeInputRoot && document.activeElement === activeInputRoot;
+                const hasTypedRoot = activeInputRoot && activeInputRoot.value.trim() !== '';
+
+                if (!isFocusedRoot && !hasTypedRoot) {
+                    rootEl.outerHTML = buildRootHTML(rootMsg);
+                }
+            }
+
             return;
         }
 
