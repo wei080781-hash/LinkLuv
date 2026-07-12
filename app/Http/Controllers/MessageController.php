@@ -199,7 +199,7 @@ class MessageController extends Controller
             ]);
         }
     }
-
+    // 刪除事件展開展開跟收縮會消失
     public function destroy(Message $message){
     \Log::info('刪除嘗試:', [
         'current_user_id' => auth()->id(),
@@ -216,7 +216,7 @@ class MessageController extends Controller
     $message->delete();
 
     // 廣播通知所有人即時移除這則訊息
-    broadcast(new \App\Events\MessageDeleted($messageId))->toOthers();
+    broadcast(new \App\Events\MessageDeleted($messageId, $parentId, $rootId))->toOthers();
 
     for ($i = 1; $i <= 10; $i++) {
         Cache::forget("messages_feed_page_{$i}");

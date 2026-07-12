@@ -160,7 +160,7 @@
 
             // 刪除監聽器
             .listen('.message.deleted', (e) => {
-             handleDeletedMessage(e.messageId);
+             handleDeletedMessage(e);
             })
 
             .listen('.message.liked', (e) => {
@@ -170,30 +170,83 @@
             
     }
 
+    // 舊的
+    // window.handleLikeBroadcast = function(e) {
+    // console.log("📡 [雷達成功攔截廣播] 收到別人的點讚訊號！包裹內容：", e);
+    
+    // // 1. 解析目標 ID
+    // const targetId = Number(e.messageId ?? e.id);
+    
+    // // 2. 升級改用 ?? 運算子，精準攔截數字 0
+    // const newCount = Number(e.likesCount ?? e.likes_count ?? 0);
+    
+    // console.log(`[探針測試] 經過 ?? 判定後的 newCount 理論數值為: ${newCount}`);
+    
+    // // 3. 同步中央記憶體
+    // if (window.globalMsgMap.has(targetId)) {
+    //     const msg = window.globalMsgMap.get(targetId);
+    //     msg.likes_count = newCount;
+    //     console.log(`[記憶體同步] 已將地圖中的 ID: ${targetId} 讚數修正為: ${newCount}`);
+    // }
+    
+    // // 4. 精準抹繪網頁 DOM 數字
+    // const countEl = document.getElementById(`lcount-${targetId}`);
+    // if (countEl) {
+    //         countEl.textContent = newCount;
+    //         console.log(`[DOM 抹繪] 已成功將網頁上的計數器更新為: ${newCount}`);
+    //     }
+    // };
 
-    window.handleLikeBroadcast = function(e) {
-    console.log("📡 [雷達成功攔截廣播] 收到別人的點讚訊號！包裹內容：", e);
-    
-    // 1. 解析目標 ID
-    const targetId = Number(e.messageId ?? e.id);
-    
-    // 2. 升級改用 ?? 運算子，精準攔截數字 0
-    const newCount = Number(e.likesCount ?? e.likes_count ?? 0);
-    
-    console.log(`[探針測試] 經過 ?? 判定後的 newCount 理論數值為: ${newCount}`);
-    
-    // 3. 同步中央記憶體
-    if (window.globalMsgMap.has(targetId)) {
-        const msg = window.globalMsgMap.get(targetId);
-        msg.likes_count = newCount;
-        console.log(`[記憶體同步] 已將地圖中的 ID: ${targetId} 讚數修正為: ${newCount}`);
-    }
-    
-    // 4. 精準抹繪網頁 DOM 數字
-    const countEl = document.getElementById(`lcount-${targetId}`);
-    if (countEl) {
-            countEl.textContent = newCount;
-            console.log(`[DOM 抹繪] 已成功將網頁上的計數器更新為: ${newCount}`);
+    window.handleDeletedMessage = function(e) {
+        const messageId = Number(e?.messageId ?? e?.id ?? e?.message_id);
+        const parentId = e?.parentId != null ? Number(e.parentId) : null;
+        const rootId = e?.rootId != null ? Number(e.rootId) : null;
+
+        if (!Number.isFinite(messageId)) {
+            return;
+        }
+
+        const collectDescendants = (id) => {
+            const node = window.globalMsgMap.get(id);
+            if (!node || !Array.isArray(node.children)) return [];
+
+            const ids = [];
+            node.children.forEach(child => {
+                ids.push(child.id);
+                ids.push(...collectDescendants(child.id));
+            });
+            return ids;
+        };
+
+        const idsToRemove = new Set([messageId, ...collectDescendants(messageId)]);
+
+        idsToRemove.forEach((id) => {
+            const node = window.globalMsgMap.get(id);
+            if (node && node.parent_id != null) {
+                const parent = window.globalMsgMap.get(node.parent_id);
+                if (parent && Array.isArray(parent.children)) {
+                    parent.children = parent.children.filter(child => child.id !== id);
+                }
+            }
+
+            window.globalMsgMap.delete(id);
+        });
+
+        const targetRootId = Number.isFinite(rootId)
+            ? rootId
+            : (Number.isFinite(parentId) ? parentId : messageId);
+
+        const rootEl = document.getElementById(`msg-${targetRootId}`);
+
+        if (targetRootId === messageId) {
+            if (rootEl) {
+                rootEl.remove();
+            }
+            return;
+        }
+
+        if (rootEl && window.globalMsgMap.has(targetRootId)) {
+            rootEl.outerHTML = buildRootHTML(window.globalMsgMap.get(targetRootId));
         }
     };
 

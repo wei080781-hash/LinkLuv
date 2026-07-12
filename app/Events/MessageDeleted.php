@@ -1,5 +1,5 @@
 <?php
-
+// 為了刪除後展開跟收縮會小消失，這是廣光刪除事件
 namespace App\Events;
 
 use Illuminate\Broadcasting\Channel;
@@ -13,10 +13,14 @@ class MessageDeleted implements ShouldBroadcast
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
     public $messageId;
+    public $parentId;
+    public $rootId;
 
-    public function __construct($messageId)
+    public function __construct($messageId, $parentId = null, $rootId = null)
     {
         $this->messageId = $messageId;
+        $this->parentId = $parentId;
+        $this->rootId = $rootId;
     }
 
     public function broadcastOn()
@@ -27,5 +31,14 @@ class MessageDeleted implements ShouldBroadcast
     public function broadcastAs()
     {
         return 'message.deleted';
+    }
+
+    public function broadcastWith()
+    {
+        return [
+            'messageId' => $this->messageId,
+            'parentId' => $this->parentId,
+            'rootId' => $this->rootId,
+        ];
     }
 }
