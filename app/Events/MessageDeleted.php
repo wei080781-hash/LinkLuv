@@ -1,5 +1,5 @@
 <?php
-// 為了刪除後展開跟收縮會小消失，這是廣光刪除事件
+
 namespace App\Events;
 
 use Illuminate\Broadcasting\Channel;
