@@ -3,13 +3,16 @@ import Echo from 'laravel-echo';
 import Pusher from 'pusher-js';
 window.Pusher = Pusher;
 
+// 動態判斷：當 .env 中的 VITE_REVERB_SCHEME 為 'https' 時啟用加密
+const isSecure = (import.meta.env.VITE_REVERB_SCHEME ?? 'https') === 'https';
+
 window.Echo = new Echo({
     broadcaster: 'reverb',
     key: import.meta.env.VITE_REVERB_APP_KEY,
     wsHost: import.meta.env.VITE_REVERB_HOST,
-    wsPort: import.meta.env.VITE_REVERB_PORT ?? 8080,
-    wssPort: import.meta.env.VITE_REVERB_PORT ?? 8080,
-    forceTLS: false,
+    wsPort: import.meta.env.VITE_REVERB_PORT ?? 80,
+    wssPort: import.meta.env.VITE_REVERB_PORT ?? 443,
+    forceTLS: isSecure,
     enabledTransports: ['ws', 'wss'],
 });
 
