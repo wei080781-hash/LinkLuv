@@ -164,7 +164,7 @@
             })
 
             .listen('.message.liked', (e) => {
-            handleLikeBroadcast(e.);
+            handleLikeBroadcast(e);
             });
             
             
