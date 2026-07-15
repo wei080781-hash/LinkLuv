@@ -160,7 +160,7 @@
 
             // 刪除監聽器
             .listen('.message.deleted', (e) => {
-             handleDeletedMessage(e.);
+             handleDeletedMessage(e);
             })
 
             .listen('.message.liked', (e) => {
