@@ -160,7 +160,7 @@
 
             // 刪除監聽器
             .listen('.message.deleted', (e) => {
-             handleDeletedMessage(e.message);
+             handleDeletedMessage(e.);
             })
 
             .listen('.message.liked', (e) => {
@@ -392,35 +392,7 @@
             }
         }
     };
-    // 刪除訊息資料並廣播
-    window.handleDeletedMessage = function(messageId) {
-        messageId = Number(messageId);
-        console.log(`[刪除廣播] 收到刪除訊號，ID: ${messageId}`);
-
-       // 1. 從全域記憶體移除
-       if (window.globalMsgMap.has(messageId)) {
-        const msg = window.globalMsgMap.get(messageId);
-        
-        // 2. 如果是子留言，從父留言的 children 陣列移除
-        if (msg.parent_id) {
-            const parent = window.globalMsgMap.get(msg.parent_id);
-            if (parent && parent.children) {
-                parent.children = parent.children.filter(c => c.id !== messageId);
-            }
-        }
-
-        // 3. 從全域 Map 刪除
-        window.globalMsgMap.delete(messageId);
-    }
     
-    // 4. 從 DOM 移除
-    const element = document.getElementById(`msg-${messageId}`);
-    if (element) {
-        element.remove();
-        console.log(`[DOM 移除] 成功移除 ID: ${messageId} 的訊息 DOM`);
-    }
-};
-
 
     // =========================================================
     // 5. 輔助函式：回溯找出根貼文 ID
