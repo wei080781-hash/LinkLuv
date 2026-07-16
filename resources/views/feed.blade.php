@@ -806,14 +806,23 @@
     };
 
     window.deleteMsg = function(id) {
-        if (!confirm('確定要刪除這則訊息嗎？')) return;
-        fetch(`/messages/${id}`, {
-            method: 'DELETE',
-            headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }
-        }).then(r => r.json()).then(d => {
-            if (d.success) loadMessages(true);
-        });
-    };
+    if (!confirm('確定要刪除這則訊息嗎？')) return;
+    id = Number(id);
+    fetch(`/messages/${id}`, {
+        method: 'DELETE',
+        headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }
+    }).then(r => r.json()).then(d => {
+        if (d.success) {
+            // 改成跟廣播收到時一樣的局部移除邏輯
+            const msg = window.globalMsgMap.get(id);
+            handleDeletedMessage({
+                messageId: id,
+                parentId: msg?.parent_id ?? null,
+                rootId: null  // 讓 handleDeletedMessage 自己往上找 root
+            });
+        }
+    });
+};
 
     window.editMsg = function(id) {
         const p = document.getElementById(`content-${id}`);
