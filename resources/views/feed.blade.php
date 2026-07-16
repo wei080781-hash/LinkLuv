@@ -825,31 +825,47 @@
 };
 
     window.editMsg = function(id) {
-        const p = document.getElementById(`content-${id}`);
-        if (!p) return;
-        const orig = p.innerText;
-        p.innerHTML = `<textarea id="edit-ta-${id}" rows="2" class="w-full text-sm border border-gray-300 rounded-lg p-2 resize-none">${orig}</textarea>
-            <div class="flex gap-2 mt-1">
-                <button onclick="saveEdit(${id})" class="text-xs bg-blue-500 text-white px-3 py-1 rounded-lg border-none cursor-pointer">儲存</button>
-                <button onclick="loadMessages(true)" class="text-xs bg-gray-200 text-gray-700 px-3 py-1 rounded-lg border-none cursor-pointer">取消</button>
-            </div>`;
-    };
+    const p = document.getElementById(`content-${id}`);
+    if (!p) return;
+    const orig = p.innerText;
+    p.innerHTML = `<textarea id="edit-ta-${id}" rows="2" class="w-full text-sm border border-gray-300 rounded-lg p-2 resize-none">${orig}</textarea>
+        <div class="flex gap-2 mt-1">
+            <button onclick="saveEdit(${id})" class="text-xs bg-blue-500 text-white px-3 py-1 rounded-lg border-none cursor-pointer">儲存</button>
+            <button onclick="cancelEdit(${id}, '${orig.replace(/'/g, "\\'")}')" class="text-xs bg-gray-200 text-gray-700 px-3 py-1 rounded-lg border-none cursor-pointer">取消</button>
+        </div>`;
+};
+
+window.cancelEdit = function(id, orig) {
+    const p = document.getElementById(`content-${id}`);
+    if (p) p.innerText = orig;
+};
 
     window.saveEdit = function(id) {
-        const val = document.getElementById(`edit-ta-${id}`)?.value;
-        if (!val) return;
-        fetch(`/messages/${id}`, {
-            method: 'PATCH',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
-            },
-            body: JSON.stringify({ content: val }),
-        }).then(r => r.json()).then(d => {
-            if (d.success) loadMessages(true);
-        });
-    };
+    id = Number(id);
+    const val = document.getElementById(`edit-ta-${id}`)?.value;
+    if (!val) return;
+    fetch(`/messages/${id}`, {
+        method: 'PATCH',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+        },
+        body: JSON.stringify({ content: val }),
+    }).then(r => r.json()).then(d => {
+        if (d.success) {
+            // 只更新這則訊息的文字內容，不重載整頁
+            const contentEl = document.getElementById(`content-${id}`);
+            if (contentEl) contentEl.innerText = val;
 
+            // 同步更新記憶體
+            if (window.globalMsgMap.has(id)) {
+                window.globalMsgMap.get(id).content = val;
+            }
+        } else {
+            alert('編輯失敗，請稍後再試');
+        }
+    });
+};
     window.toggleLike = function(id) {
         id = Number(id);
         
