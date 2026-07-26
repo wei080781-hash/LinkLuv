@@ -767,8 +767,8 @@
         const fi = form.querySelector('input[type="file"]');
         const submitBtn = form.querySelector('button[type="submit"]');
 
-        if (fi?.files.length > 0 && fi.files[0].size > 50 * 1024 * 1024) {
-            alert('檔案太大，最大限制為 50MB');
+        if (fi?.files.length > 0 && fi.files[0].size > 10 * 1024 * 1024) {
+            alert('檔案太大，最大限制為 10MB');
             fi.value = '';
             return;
         }
