@@ -56,7 +56,7 @@ class MessageController extends Controller
         $validated = $request->validate([
             'content'   => 'nullable|string|max:1000',
             'parent_id' => 'nullable|exists:messages,id',
-            'media'     => 'nullable|file|mimes:jpg,jpeg,png,gif,mp4,mov,ogg|max:51200',
+            'media'     => 'nullable|file|mimes:jpg,jpeg,png,gif,mp4,mov,ogg|max:10240',
         ]);
 
         // ★ 內容與媒體至少要有一個
