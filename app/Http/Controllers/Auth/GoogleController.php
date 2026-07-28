@@ -30,8 +30,15 @@ class GoogleController extends Controller
                 'name' => $googleUser->getName(),
                 'google_id' => $googleUser->getId(), // 建議加上
                 'password' => Hash::make(uniqid()),
+                // 新加上這個條件讓google用戶標記為以驗證
+                'email_verified_at' => now(),
             ]
         );
+
+        // 判斷帳號已存在資料庫並補上google id 去做新登入
+        if (!$user->google_id) {
+            $user->update(['google_id' => $googleUser->getId()]);
+        }
 
         Auth::login($user);
 
