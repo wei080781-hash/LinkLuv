@@ -15,6 +15,13 @@ class PasswordController extends Controller
      */
     public function update(Request $request): RedirectResponse
     {
+
+        $user = $request->user();
+
+        if ($user->google_id) {
+        abort(403, 'Google 登入帳號無法使用此方式修改密碼。');
+        }
+
         $validated = $request->validateWithBag('updatePassword', [
             'current_password' => ['required', 'current_password'],
             'password' => ['required', Password::defaults(), 'confirmed'],
