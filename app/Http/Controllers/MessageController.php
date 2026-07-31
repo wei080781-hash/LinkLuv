@@ -57,6 +57,10 @@ class MessageController extends Controller
             'content'   => 'nullable|string|max:1000',
             'parent_id' => 'nullable|exists:messages,id',
             'media'     => 'nullable|file|mimes:jpg,jpeg,png,gif,mp4,mov,ogg|max:10240',
+        ],[
+            // 新增自訂錯誤的訊息
+            'media.max' => '檔案大小不能超過 10MB，請壓縮後再上傳。',
+            'media.mimes' => '不支援的檔案格式。',
         ]);
 
         // ★ 內容與媒體至少要有一個
