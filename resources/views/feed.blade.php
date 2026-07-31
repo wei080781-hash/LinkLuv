@@ -362,10 +362,7 @@
                 console.log("children before =", trueParent.children);
                 if (!trueParent.children) trueParent.children = [];
                 // 檢查是否重複，不重複才塞入
-                // 舊的
-                // if (!trueParent.children.some(c => c.id === newMsg.id)) {
-                // 新的
-                if (!trueParent.children.some(c => c.id === existing.id)) {    
+                if (!trueParent.children.some(c => c.id === newMsg.id)) {   
                     trueParent.children.push(newMsg);
                     console.log("children after =", trueParent.children);
                 }
