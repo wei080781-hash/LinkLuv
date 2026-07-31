@@ -726,15 +726,30 @@
         fetch("{{ route('messages.store') }}", {
             method: 'POST',
             body: new FormData(form),
-            headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }
+            headers: { 
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                // 讓LARAVEL 知道我要明確需要JSON格式而不是傳統(HTML)變成302錯誤報錯。
+                'Accept': 'application/json'
+            }
         })
-        .then(r => {
+        .then(async r => {
             if (r.status === 419) {
             alert('登入已過期，頁面將自動重新整理');
             window.location.reload();
             return Promise.reject('419');
         }
-        return r.json();
+        
+        const data = await r.json();
+
+        if (r.status === 422) {
+            const firstError = data.errors
+                ? Object.values(data.errors)[0][0]
+                : (data.message || '發生錯誤，請重新確認內容');
+            alert(firstError);
+            return Promise.reject('validation_failed');
+        }
+
+        return data;
     })
         .then(d => {
             console.log("收到資料：", d);
@@ -753,7 +768,9 @@
             }
         })
         .catch(err => {
+            if (err !== '419' && err !== 'validation_failed') {
             console.error('發送失敗:', err);
+            }
         })
         .finally(() => {
             // 解鎖按鈕
