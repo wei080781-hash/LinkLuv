@@ -469,10 +469,13 @@
     // =========================================================
     // 7. HTML 建構函式
     // =========================================================
-    function buildRootHTML(msg) {
+    function (msg) {
         const hasReplies = msg.children && msg.children.length > 0;
         const isOpen = window.expandedSet.has(msg.id);
-        const count = msg.children ? msg.children.length : 0;
+        // const count = msg.children ? msg.children.length : 0;
+        // 新的修改
+        const count = msg.children ? countAllReplies(msg) : 0;
+
 
         const avatarCol = hasReplies
             ? `<div class="flex flex-col items-center flex-shrink-0 w-10">
@@ -536,14 +539,28 @@
             ? msg.children.map(c => buildReplyHTML(c, rootId, new Set(visited), depth + 1)).join('')
             : '';
 
+        // const branchBtn = hasChildren
+        //     ? `<button class="hover:text-gray-600 bg-transparent border-none cursor-pointer p-0 text-xs text-gray-400" id="bbtn-${msg.id}" onclick="toggleBranch(${msg.id}, this)">▾ 收合</button>`
+        //     : '';
+        // 新的修改
+        const replyCount = hasChildren ? countAllReplies(msg) : 0;
+
         const branchBtn = hasChildren
-            ? `<button class="hover:text-gray-600 bg-transparent border-none cursor-pointer p-0 text-xs text-gray-400" id="bbtn-${msg.id}" onclick="toggleBranch(${msg.id}, this)">▾ 收合</button>`
+            ? `<button class="hover:text-gray-600 bg-transparent border-none cursor-pointer p-0 text-xs text-gray-400" id="bbtn-${msg.id}" onclick="toggleBranch(${msg.id}, this)">
+                <span id="barrow-${msg.id}">▾</span> <span id="blabel-${msg.id}">收合</span>
+            </button>`
             : '';
 
+        // const childrenSection = hasChildren
+        //     ? (depth < 3
+        //         ? `<div id="branch-${msg.id}" class="ml-6 pl-4 border-l-2 border-gray-200 mt-1">${childrenHtml}</div>`
+        //         : `<div id="branch-${msg.id}">${childrenHtml}</div>`)
+        //     : '';
+        // 新的修改
         const childrenSection = hasChildren
             ? (depth < 3
-                ? `<div id="branch-${msg.id}" class="ml-6 pl-4 border-l-2 border-gray-200 mt-1">${childrenHtml}</div>`
-                : `<div id="branch-${msg.id}">${childrenHtml}</div>`)
+            ? `<div id="branch-${msg.id}" class="ml-6 pl-4 border-l-2 border-gray-200 mt-1" data-count="${replyCount}">${childrenHtml}</div>`
+            : `<div id="branch-${msg.id}" data-count="${replyCount}">${childrenHtml}</div>`)
             : '';
 
         const ownerButtons = (window.currentUserId && msg.user_id == window.currentUserId)
@@ -643,6 +660,16 @@
     // =========================================================
     // 9. 互動事件函式
     // =========================================================
+    // 共用的遞迴計算函式
+    function countAllReplies(msg) {
+    if (!msg.children || msg.children.length === 0) return 0;
+    let total = msg.children.length;
+    msg.children.forEach(child => {
+        total += countAllReplies(child);
+    });
+    return total;
+    }
+
     window.toggleReplies = function(rootId, count) {
         const wrap = document.getElementById(`rwrap-${rootId}`);
         const btn = document.getElementById(`tbtn-${rootId}`);
@@ -663,16 +690,36 @@
         }
     };
 
+    // window.toggleBranch = function(msgId, btn) {
+    //     const branch = document.getElementById(`branch-${msgId}`);
+    //     if (!branch) return;
+    //     const isHidden = branch.classList.contains('hidden');
+    //     if (isHidden) {
+    //         branch.classList.remove('hidden');
+    //         btn.textContent = '▾ 收合';
+    //     } else {
+    //         branch.classList.add('hidden');
+    //         btn.textContent = '▸ 展開';
+    //     }
+    // };
+    // 新的修改
     window.toggleBranch = function(msgId, btn) {
         const branch = document.getElementById(`branch-${msgId}`);
         if (!branch) return;
+
+        const arrow = document.getElementById(`barrow-${msgId}`);
+        const label = document.getElementById(`blabel-${msgId}`);
+        const count = branch.dataset.count || 0;
+
         const isHidden = branch.classList.contains('hidden');
         if (isHidden) {
             branch.classList.remove('hidden');
-            btn.textContent = '▾ 收合';
+            if (arrow) arrow.textContent = '▾';
+            if (label) label.textContent = '收合';
         } else {
             branch.classList.add('hidden');
-            btn.textContent = '▸ 展開';
+            if (arrow) arrow.textContent = '▸';
+            if (label) label.textContent = `查看 ${count} 則回覆`;
         }
     };
 
