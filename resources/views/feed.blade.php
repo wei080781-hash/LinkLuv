@@ -384,7 +384,7 @@
 
                 if (!isFocused && !hasTyped) {
                     // 核心重繪：此時記憶體結構已正確，深層留言將會完美渲染
-                    rootEl.outerHTML = buildRootHTML(rootMsg);
+                    rootEl.outerHTML = HTML(rootMsg);
                 }
             }
         }
@@ -469,7 +469,7 @@
     // =========================================================
     // 7. HTML 建構函式
     // =========================================================
-    function (msg) {
+    function buildRootHTML(msg) {
         const hasReplies = msg.children && msg.children.length > 0;
         const isOpen = window.expandedSet.has(msg.id);
         // const count = msg.children ? msg.children.length : 0;
