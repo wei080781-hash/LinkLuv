@@ -866,6 +866,26 @@
         });
     };
 
+//     window.deleteMsg = function(id) {
+//     if (!confirm('確定要刪除這則訊息嗎？')) return;
+//     id = Number(id);
+//     fetch(`/messages/${id}`, {
+//         method: 'DELETE',
+//         headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }
+//     }).then(r => r.json()).then(d => {
+//         if (d.success) {
+//             // 改成跟廣播收到時一樣的局部移除邏輯
+//             const msg = window.globalMsgMap.get(id);
+//             handleDeletedMessage({
+//                 messageId: id,
+//                 parentId: msg?.parent_id ?? null,
+//                 rootId: null  // 讓 handleDeletedMessage 自己往上找 root
+//             });
+//         }
+//     });
+// };
+
+    //新的修改
     window.deleteMsg = function(id) {
     if (!confirm('確定要刪除這則訊息嗎？')) return;
     id = Number(id);
@@ -874,12 +894,22 @@
         headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }
     }).then(r => r.json()).then(d => {
         if (d.success) {
-            // 改成跟廣播收到時一樣的局部移除邏輯
             const msg = window.globalMsgMap.get(id);
+
+            // 往上一層一層找，直到找到真正沒有 parent_id 的頂層留言
+            let rootId = id;
+            let cursor = msg;
+            while (cursor && cursor.parent_id != null) {
+                const parentNode = window.globalMsgMap.get(cursor.parent_id);
+                if (!parentNode) break;
+                rootId = parentNode.id;
+                cursor = parentNode;
+            }
+
             handleDeletedMessage({
                 messageId: id,
                 parentId: msg?.parent_id ?? null,
-                rootId: null  // 讓 handleDeletedMessage 自己往上找 root
+                rootId: rootId
             });
         }
     });
