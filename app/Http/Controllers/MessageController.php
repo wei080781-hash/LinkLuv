@@ -136,9 +136,10 @@ class MessageController extends Controller
         // 若為影片，啟動背景壓縮任務
         if ($mediaType === 'video') {
             $message->update(['status' => 'processing']);
-            // 使用 ->toOthers() 可以完美排除正在操作上傳的 A 帳號，避免 A 帳號畫面打架
-            broadcast(new \App\Events\MessageStatusUpdated($message))->toOthers();
-            CompressVideoJob::dispatch($message);
+            //為了不出現403錯誤所以先隱藏
+            // // 使用 ->toOthers() 可以完美排除正在操作上傳的 A 帳號，避免 A 帳號畫面打架
+            // broadcast(new \App\Events\MessageStatusUpdated($message))->toOthers();
+            // CompressVideoJob::dispatch($message);
         }
 
         // 清除快取並回傳
