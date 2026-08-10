@@ -39,7 +39,6 @@ class MessageController extends Controller
             $msg->parent_user_name = $msg->parent?->user?->name ?? null;
             return $msg;
         });
-        
         return response()->json([
             'data' => $items,
             'has_more' => $messages->hasMorePages(),
@@ -162,6 +161,7 @@ class MessageController extends Controller
             \App\Jobs\CompressVideoJob::dispatch($message);
         }
         // 5. 回傳給發文者 (A帳號) 本人
+	\Log::info('準備回傳給前端時的 status: ' . $message->status);
         return response()->json(['success' => true, 'data' => $message]);
     }
 
