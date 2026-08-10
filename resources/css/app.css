@@ -65,4 +65,38 @@
     .linkluv-comments .reply-item::after {
         display: none;
     }
+
+    /* ── 影片處理中：轉圈動畫 ── */
+    /* .msg-media-processing : 影片還在背景壓縮上傳時，顯示的占位容器 */
+    .msg-media-processing {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #f3f4f6;
+        border-radius: 12px;
+        height: 160px;
+    }
+
+    /* .spinner : 轉圈動畫本體 */
+    .msg-media-processing .spinner {
+        width: 36px;
+        height: 36px;
+        border: 3px solid #e5e7eb;
+        border-top-color: #ec4899;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+    }
+
+    /* ── 影片壓縮失敗提示 ── */
+    .msg-media-failed {
+        background: #fef2f2;
+        color: #dc2626;
+        padding: 16px;
+        border-radius: 12px;
+        text-align: center;
+    }
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
 }

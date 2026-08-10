@@ -639,16 +639,36 @@
 
     function buildMediaHtml(msg) {
         const s3BaseUrl = 'https://linkluv-media-bucket.s3.ap-east-2.amazonaws.com/';
+
         if (msg.media_type === 'image' && msg.image_path) {
             const isS3 = msg.image_path.startsWith('images/') || !msg.image_path.startsWith('storage/');
             const imgUrl = isS3 ? `${s3BaseUrl}${msg.image_path}` : `/storage/${msg.image_path}`;
             return `<div class="msg-media"><img src="${imgUrl}" onclick="openLightbox('image','${imgUrl}')"></div>`;
         }
-        if (msg.media_type === 'video' && msg.video_path) {
-            const isS3 = msg.video_path.startsWith('videos/') || !msg.video_path.startsWith('storage/');
-            const videoUrl = isS3 ? `${s3BaseUrl}${msg.video_path}` : `/storage/${msg.video_path}`;
-            return `<div class="msg-media"><video controls preload="metadata"><source src="${videoUrl}" type="video/mp4">您的瀏覽器不支援影片播放。</video></div>`;
+        // 影片的處理
+        if (msg.media_type === 'video') {
+           // 壓縮處理中：顯示轉圈動畫
+           if (msg.status === 'processing') {
+             return `<div class="msg-media msg-media-processing">
+                        <div class="spinner"></div>
+                    </div>`;
+            }
+
+            // 壓縮失敗：顯示錯誤提示
+            if (msg.status === 'failed') {
+            return `<div class="msg-media msg-media-failed">
+                        <p>⚠️ 影片轉檔失敗，請重新上傳</p>
+                    </div>`;
+            }
+
+            // 處理完成：正常渲染 video 標籤
+            if (msg.media_type === 'video' && msg.video_path) {
+               const isS3 = msg.video_path.startsWith('videos/') || !msg.video_path.startsWith('storage/');
+               const videoUrl = isS3 ? `${s3BaseUrl}${msg.video_path}` : `/storage/${msg.video_path}`;
+               return `<div class="msg-media"><video controls preload="metadata"><source src="${videoUrl}" type="video/mp4">您的瀏覽器不支援影片播放。</video></div>`;
+            }
         }
+
         return '';
     }
 
