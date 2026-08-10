@@ -32,7 +32,7 @@ public function handle()
             'ffmpeg.binaries'  => PHP_OS_FAMILY === 'Windows' ? 'D:/ffmpeg-8.1.1-full_build/ffmpeg-8.1.1-full_build/bin/ffmpeg.exe' : '/usr/bin/ffmpeg',
             'ffprobe.binaries' => PHP_OS_FAMILY === 'Windows' ? 'D:/ffmpeg-8.1.1-full_build/ffmpeg-8.1.1-full_build/bin/ffprobe.exe' : '/usr/bin/ffprobe',
             'timeout'          => 3600,
-            'ffmpeg.threads'   => 12,
+            'ffmpeg.threads'   => 2,
         ]);
 
         $originalPath = $this->message->video_path; // 例如: videos/xxx.mp4
