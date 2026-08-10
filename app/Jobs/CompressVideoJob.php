@@ -14,6 +14,9 @@ class CompressVideoJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
+    // 告訴job類別最長允許執行多長時間
+    public $timeout = 1800;
+
     protected $message;
      
     public function __construct(Message $message)
