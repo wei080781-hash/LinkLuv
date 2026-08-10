@@ -74,13 +74,13 @@
         justify-content: center;
         background: #f3f4f6;
         border-radius: 12px;
-        height: 160px;
+        height: 80px;   /* 從 160px 縮小到 80px */
     }
 
     /* .spinner : 轉圈動畫本體 */
     .msg-media-processing .spinner {
-        width: 36px;
-        height: 36px;
+        width: 24px;    /* 從 36px 縮小到 24px */
+        height: 24px;
         border: 3px solid #e5e7eb;
         border-top-color: #ec4899;
         border-radius: 50%;
