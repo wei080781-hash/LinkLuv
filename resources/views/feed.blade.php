@@ -793,6 +793,7 @@
 
     // ✅ 完美修正後的 submitReply 函式
     window.submitReply = function(e, rootId) {
+        console.log('🚀 觸發 submitReply！有沒有選檔案:', hasFile);
         e.preventDefault();
         const form = e.target;
         const contentInput = form.querySelector('input[name="content"]');
@@ -956,10 +957,10 @@
         };
 
         // 統一收尾：解鎖按鈕並隱藏進度條
-        function cleanupUI() {
-            if (submitBtn) submitBtn.disabled = false;
-            if (progressContainer) progressContainer.classList.add('hidden');
-        }
+        // function cleanupUI() {
+        //     if (submitBtn) submitBtn.disabled = false;
+        //     if (progressContainer) progressContainer.classList.add('hidden');
+        // }
 
         // 發送表單
         xhr.send(new FormData(form));
