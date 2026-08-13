@@ -2,8 +2,28 @@
 <x-app-layout>
     <div class="py-12 bg-gray-50 flex-1">
         <div class="max-w-4xl mx-auto px-6">
-            <h2 class="font-semibold text-2xl text-gray-800 leading-tight mb-8">生活牆</h2>
+            <!-- 關鍵修正：將「生活牆標題」與「進度條」包在同一個 flex 容器內 -->
+            <div class="flex items-center justify-between mb-8">
+                <h2 class="font-semibold text-2xl text-gray-800 leading-tight mb-8">生活牆</h2>
+
+                <!-- 上傳進度區：放在標題右側 -->
+                <div id="upload-progress-container" class="w-72 flex-shrink-0 space-y-2">
+                    <!-- 測試用假 UI -->
+                    <div class="bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
+                        <div class="flex justify-between items-center mb-1 text-xs text-gray-600">
+                            <span class="font-medium text-blue-600">檔案上傳中...</span>
+                            <span class="font-bold text-blue-600">45%</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                            <div class="bg-blue-500 h-2 rounded-full" style="width: 45%"></div>
+                        </div>
+                </div>
+            </div>
+            
+            <!-- 發表動態卡片 -->
             @include('components.message-form')
+
+            <!-- 訊息列表區 -->
             <div id="messages-list" class="flex flex-col gap-4"></div>
             <div id="scroll-sentinel" class="h-8 flex items-center justify-center">
                 <span id="loading-indicator" class="text-sm text-gray-400 hidden">載入中...</span>
