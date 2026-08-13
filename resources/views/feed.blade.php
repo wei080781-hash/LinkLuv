@@ -869,16 +869,33 @@
         }
          return r.json();
     })
+        // .then(d => {
+        //     if (d.success && d.data) {
+        //         form.reset();
+        //         const preview = document.getElementById('fprev-main');
+        //         if (preview) preview.innerHTML = '';
+        //         handleNewMessage(d.data);
+        //     } else {
+        //         loadMessages(true);
+        //         form.reset();
+        //     }
+        // })
+        // 影片還在處理中先不要呼叫
         .then(d => {
             if (d.success && d.data) {
                 form.reset();
                 const preview = document.getElementById('fprev-main');
                 if (preview) preview.innerHTML = '';
-                handleNewMessage(d.data);
-            } else {
-                loadMessages(true);
-                form.reset();
-            }
+
+                // ✅ 影片還在背景處理中：先不要顯示卡片，等處理完成的廣播通知再顯示
+                const isProcessingVideo = d.data.media_type === 'video' && d.data.status === 'processing';
+                if (!isProcessingVideo) {
+                    handleNewMessage(d.data);
+                }
+                } else {
+                    loadMessages(true);
+                    form.reset();
+                }
         })
         .catch(err => console.error('貼文失敗:', err))
         .finally(() => {

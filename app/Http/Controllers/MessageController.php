@@ -111,9 +111,14 @@ class MessageController extends Controller
             'status'     => ($mediaType === 'video') ? 'processing' : 'ready',
         ]);
 
-        // 2. 加上這一行：把訊息丟進大聲公廣播出去！
-        // .toOthers() 很重要，它能確保「發文者自己」不會重複收到這則推播
-        broadcast(new MessageStatusUpdated($message))->toOthers();
+        // // 2. 加上這一行：把訊息丟進大聲公廣播出去！
+        // // .toOthers() 很重要，它能確保「發文者自己」不會重複收到這則推播
+        // broadcast(new MessageStatusUpdated($message))->toOthers();
+
+        // 改動讓影片後端完成才會顯示
+        if ($mediaType !== 'video') {
+            broadcast(new MessageStatusUpdated($message))->toOthers();
+        }
 
         // 更新物化路徑 (Materialized Path)
         $paddedId = str_pad($message->id, 10, '0', STR_PAD_LEFT);
@@ -148,22 +153,34 @@ class MessageController extends Controller
 
         // 💡【本次新增的核心邏輯】
         // 1. 預先載入 user 關聯，讓前端能順利讀取到頭像與名稱
-        $message->load(['user', 'parent.user']);
+        // $message->load(['user', 'parent.user']);
         
-        // 2. 手動注入與 index() 方法相同的虛擬擴充屬性，防止前端 JavaScript 渲染時出錯
+    //     // 2. 手動注入與 index() 方法相同的虛擬擴充屬性，防止前端 JavaScript 渲染時出錯
+    //     $message->likes_count = 0;
+    //     $message->is_liked = false;
+    //     $message->parent_user_name = $message->parent?->user?->name ?? null;
+    //     // 讓 B 帳號的前端收到後，能「無中生有」把這張新卡片畫到畫面上（此時影片狀態是 processing，前端會畫出轉圈圈）
+    //     broadcast(new \App\Events\MessageCreated($message))->toOthers();
+    //     // 4. 如果是影片，才丟進背景佇列進行壓縮轉檔
+    //     if ($mediaType === 'video') {
+    //         \App\Jobs\CompressVideoJob::dispatch($message);
+    //     }
+    //     // 5. 回傳給發文者 (A帳號) 本人
+	// \Log::info('準備回傳給前端時的 status: ' . $message->status);
+    //     return response()->json(['success' => true, 'data' => $message]);
+     // 改動讓影片後端完成才會顯示
+        $message->load(['user', 'parent.user']);
         $message->likes_count = 0;
         $message->is_liked = false;
         $message->parent_user_name = $message->parent?->user?->name ?? null;
-        // 讓 B 帳號的前端收到後，能「無中生有」把這張新卡片畫到畫面上（此時影片狀態是 processing，前端會畫出轉圈圈）
+    if ($mediaType !== 'video') {
         broadcast(new \App\Events\MessageCreated($message))->toOthers();
-        // 4. 如果是影片，才丟進背景佇列進行壓縮轉檔
-        if ($mediaType === 'video') {
-            \App\Jobs\CompressVideoJob::dispatch($message);
-        }
-        // 5. 回傳給發文者 (A帳號) 本人
-	\Log::info('準備回傳給前端時的 status: ' . $message->status);
-        return response()->json(['success' => true, 'data' => $message]);
     }
+    if ($mediaType === 'video') {
+        \App\Jobs\CompressVideoJob::dispatch($message);
+    }
+    return response()->json(['success' => true, 'data' => $message]);
+}
 
     // 處理圖片優化與上傳至 S3
     private function handleImageUpload($file)
