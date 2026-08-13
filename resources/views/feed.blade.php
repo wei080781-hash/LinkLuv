@@ -3,19 +3,20 @@
     <div class="py-12 bg-gray-50 flex-1">
         <div class="max-w-4xl mx-auto px-6 flex flex-col gap-6">
             <!-- 【第一層】頂部列：左邊標題，右邊進度條 -->
-             <div class="flex items-center justify-between w-full h-12">
+            <div class="flex items-center justify-between w-full h-12">
                 <h2 class="font-semibold text-2xl text-gray-800 leading-tight flex-shrink-0">生活牆</h2>
 
-                <!-- 上傳進度區：固定寬度 w-72，避免被壓縮 -->
-                <div id="upload-progress-container" class="w-72 flex-shrink-0 space-y-2"></div>
+                <!-- 上傳進度區：預設 hidden 隱藏，完整包裹卡片 -->
+                <div id="upload-progress-container" class="w-72 flex-shrink-0 space-y-2 hidden">
                     <div class="bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
                         <div class="flex justify-between items-center mb-1 text-xs text-gray-600">
-                            <span class="font-medium text-blue-600">檔案上傳中...</span>
-                            <span class="font-bold text-blue-600">45%</span>
+                            <span id="upload-status-text" class="font-medium text-blue-600">檔案上傳中...</span>
+                            <span id="upload-percentage" class="font-bold text-blue-600">0%</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                            <div id="upload-progress-bar" class="bg-blue-500 h-2 rounded-full transition-all duration-150" style="width: 0%"></div>     
+                        </div>
                     </div>
-                    <div class="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
-                        <div class="bg-blue-500 h-2 rounded-full" style="width: 45%"></div>
-                    </div>   
                 </div>
             </div>
             
@@ -798,6 +799,10 @@
         const fileInput = form.querySelector('input[type="file"]');
         const submitBtn = form.querySelector('button[type="submit"]');
 
+        // 防呆：確認是否有選擇檔案
+        const hasFile = fileInput && fileInput.files && fileInput.files.length > 0;
+
+        // 1. 防呆：如果沒有文字也沒有檔案，就不處理
         if (!contentInput.value.trim() && (!fileInput || !fileInput.files.length)) {
             alert('請輸入回覆內容或上傳媒體');
             return;
@@ -808,60 +813,157 @@
 
         const msgId = form.querySelector('input[name="parent_id"]')?.value;
 
-        fetch("{{ route('messages.store') }}", {
-            method: 'POST',
-            body: new FormData(form),
-            headers: { 
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                // 讓LARAVEL 知道我要明確需要JSON格式而不是傳統(HTML)變成302錯誤報錯。
-                'Accept': 'application/json'
-            }
-        })
-        .then(async r => {
-            if (r.status === 419) {
-            alert('登入已過期，頁面將自動重新整理');
-            window.location.reload();
-            return Promise.reject('419');
+    //     fetch("{{ route('messages.store') }}", {
+    //         method: 'POST',
+    //         body: new FormData(form),
+    //         headers: { 
+    //             'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+    //             // 讓LARAVEL 知道我要明確需要JSON格式而不是傳統(HTML)變成302錯誤報錯。
+    //             'Accept': 'application/json'
+    //         }
+    //     })
+    //     .then(async r => {
+    //         if (r.status === 419) {
+    //         alert('登入已過期，頁面將自動重新整理');
+    //         window.location.reload();
+    //         return Promise.reject('419');
+    //     }
+        
+    //     const data = await r.json();
+
+    //     if (r.status === 422) {
+    //         const firstError = data.errors
+    //             ? Object.values(data.errors)[0][0]
+    //             : (data.message || '發生錯誤，請重新確認內容');
+    //         alert(firstError);
+    //         return Promise.reject('validation_failed');
+    //     }
+
+    //     return data;
+    // })
+    //     .then(d => {
+    //         console.log("收到資料：", d);
+    //         if (d.success && d.data) {
+    //             // 1. 先清空表單，釋放 hasTyped 狀態
+    //             form.reset();
+    //             contentInput.blur(); // 這一行是要在呼叫handleNewMessage之前,主動把輸入框拿掉
+    //             if (msgId) {
+    //                 const preview = document.getElementById(`fprev-${msgId}`);
+    //                 if (preview) preview.innerHTML = '';
+    //             }
+    //             console.log("開始更新畫面");
+    //             // 2. 再安全觸發 DOM 重繪
+    //             handleNewMessage(d.data);
+    //             console.log("更新完成");
+    //         }
+    //     })
+    //     .catch(err => {
+    //         if (err !== '419' && err !== 'validation_failed') {
+    //         console.error('發送失敗:', err);
+    //         }
+    //     })
+    //     .finally(() => {
+    //         // 解鎖按鈕
+    //         if (submitBtn) submitBtn.disabled = false;
+    //     });
+    // 新的修改部分
+        // 取得進度條 DOM 元素
+        const progressContainer = document.getElementById('upload-progress-container');
+        const progressBar = document.getElementById('upload-progress-bar');
+        const progressPercent = document.getElementById('upload-percentage');
+        const progressStatus = document.getElementById('upload-status-text');
+
+        // 如果「有上傳檔案」，展開進度條並初始化狀態
+        if (hasFile && progressContainer) {
+            progressContainer.classList.remove('hidden');
+            if (progressBar) progressBar.style.width = '0%';
+            if (progressPercent) progressPercent.textContent = '0%';
+            if (progressStatus) progressStatus.textContent = '檔案上傳中...';
         }
         
-        const data = await r.json();
+        // 建立 XHR 物件進行非同步傳輸
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', "{{ route('messages.store') }}", true);
 
-        if (r.status === 422) {
-            const firstError = data.errors
-                ? Object.values(data.errors)[0][0]
-                : (data.message || '發生錯誤，請重新確認內容');
-            alert(firstError);
-            return Promise.reject('validation_failed');
+        // 設定 Request Headers
+        xhr.setRequestHeader('X-CSRF-TOKEN', document.querySelector('meta[name="csrf-token"]').content);
+        xhr.setRequestHeader('Accept', 'application/json');
+
+        // 2. 監聽上傳進度 (Upload Progress)
+        if (hasFile && xhr.upload) {
+           xhr.upload.onprogress = function(event) {
+               if (event.lengthComputable) {
+                  // 計算目前完成百分比
+                  const percentComplete = Math.round((event.loaded / event.total) * 100);
+
+                  // 動態更新前端畫面
+                  if (progressBar) progressBar.style.width = percentComplete + '%';
+                  if (progressPercent) progressPercent.textContent = percentComplete + '%';
+                }
+             };
         }
 
-        return data;
-    })
-        .then(d => {
-            console.log("收到資料：", d);
-            if (d.success && d.data) {
-                // 1. 先清空表單，釋放 hasTyped 狀態
+        // 3. 請求完成後的處理
+        xhr.onload = function() {
+            let data = {};
+            try {
+                data = JSON.parse(xhr.responseText);
+            } catch (err) {
+                console.error('JSON 解析失敗:', err);
+            }
+            
+            // 處理 419 (登入 Session 過期)
+            if (xhr.status === 419) {
+                alert('登入已過期，頁面將自動重新整理');
+                window.location.reload();
+                return;
+            }
+
+            // 處理 422 (表單驗證錯誤)
+            if (xhr.status === 422) {
+                const firstError = data.errors
+                    ? Object.values(data.errors)[0][0]
+                    : (data.message || '發生錯誤，請重新確認內容');
+                alert(firstError);
+                cleanupUI();
+                return;
+            }
+            
+            // 處理 200~299 成功狀態 
+            if (xhr.status >= 200 && xhr.status < 300 && data.success && data.data) {
                 form.reset();
-                contentInput.blur(); // 這一行是要在呼叫handleNewMessage之前,主動把輸入框拿掉
+                if (contentInput) contentInput.blur();
+
                 if (msgId) {
-                    const preview = document.getElementById(`fprev-${msgId}`);
-                    if (preview) preview.innerHTML = '';
+                   const preview = document.getElementById(`fprev-${msgId}`);
+                   if (preview) preview.innerHTML = '';
                 }
+                
                 console.log("開始更新畫面");
-                // 2. 再安全觸發 DOM 重繪
-                handleNewMessage(d.data);
+                handleNewMessage(data.data);
                 console.log("更新完成");
+            } else {
+                alert(data.message || '發送失敗，請稍後再試');
             }
-        })
-        .catch(err => {
-            if (err !== '419' && err !== 'validation_failed') {
-            console.error('發送失敗:', err);
-            }
-        })
-        .finally(() => {
-            // 解鎖按鈕
+            
+            cleanupUI();
+        };
+
+        // 4. 處理網路異常
+        xhr.onerror = function() {
+            alert('網路異常，請稍後再試');
+            cleanupUI();
+        };
+
+        // 統一收尾：解鎖按鈕並隱藏進度條
+        function cleanupUI() {
             if (submitBtn) submitBtn.disabled = false;
-        });
-    };
+            if (progressContainer) progressContainer.classList.add('hidden');
+        }
+
+        // 發送表單
+        xhr.send(new FormData(form));
+    }; 
 
     window.submitPost = function(e) {
         e.preventDefault();
