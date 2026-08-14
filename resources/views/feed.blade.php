@@ -972,27 +972,117 @@
         const fi = form.querySelector('input[type="file"]');
         const submitBtn = form.querySelector('button[type="submit"]');
 
+        //防呆:檢查檔案大小 (預先攔截超過 10MB 的檔案)新增部分
+        const hasFile = fi && fi.files && fi.files.length > 0;
+        // 原有
         if (fi?.files.length > 0 && fi.files[0].size > 10 * 1024 * 1024) {
             alert('檔案太大，最大限制為 10MB');
             fi.value = '';
             return;
         }
 
+        // 防重複點擊鎖定
         if (submitBtn) submitBtn.disabled = true;
+        // 新的部分
+        // 2. 取得進度條 DOM 元素並初始化狀態
+        const progressContainer = document.getElementById('upload-progress-container');
+        const progressBar = document.getElementById('upload-progress-bar');
+        const progressPercent = document.getElementById('upload-percentage');
+        const progressStatus = document.getElementById('upload-status-text');
 
-        fetch("{{ route('messages.store') }}", {
-            method: 'POST',
-            body: new FormData(form),
-            headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }
-        })
-        .then(r => {
-            if (r.status === 419) {
-            alert('登入已過期，頁面將自動重新整理');
-            window.location.reload();
-            return Promise.reject('419');
+        if (hasFile && progressContainer) {
+            progressContainer.classList.remove('hidden');
+            if (progressBar) progressBar.style.width = '0%';
+            if (progressPercent) progressPercent.textContent = '0%';
+            if (progressStatus) progressStatus.textContent = '檔案上傳中...';
         }
-         return r.json();
-    })
+
+        // 3. 建立 XHR 物件進行非同步傳輸
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', "{{ route('messages.store') }}", true);
+        xhr.setRequestHeader('X-CSRF-TOKEN', document.querySelector('meta[name="csrf-token"]').content);
+        xhr.setRequestHeader('Accept', 'application/json');
+
+        // 4. 監聽上傳進度 (即時計算傳輸百分比)
+        if (hasFile && xhr.upload) {
+            xhr.upload.onprogress = function(event) {
+                if (event.lengthComputable) {
+                    const percentComplete = Math.round((event.loaded / event.total) * 100);
+                    if (progressBar) progressBar.style.width = percentComplete + '%';
+                    if (progressPercent) progressPercent.textContent = percentComplete + '%';
+                }
+            };
+        }
+
+        // 5. 請求完成後的處理
+        xhr.onload = function() {
+            let data = {};
+            try {
+                data = JSON.parse(xhr.responseText);
+            } catch (err) {
+                console.error('JSON 解析失敗:', err);
+            }
+
+            // 處理 Session 過期 (419)
+            if (xhr.status === 419) {
+                alert('登入已過期，頁面將自動重新整理');
+                window.location.reload();
+                return;
+            }
+
+            // 處理成功狀態 (200~299)
+            if (xhr.status >= 200 && xhr.status < 300 && data.success && data.data) {
+                form.reset();    
+                const preview = document.getElementById('fprev-main');
+                if (preview) preview.innerHTML = '';
+
+                // ✅ 保留原有的影片處理邏輯：如果影片還在後端轉檔中，先不繪製卡片，等廣播通知
+                const isProcessingVideo = data.data.media_type === 'video' && data.data.status === 'processing';
+                if (!isProcessingVideo) {
+                    handleNewMessage(data.data);
+                }
+            } else {
+                // 失敗時的保險機制
+                if (typeof loadMessages === 'function') loadMessages(true);
+                form.reset();
+            }
+
+            cleanupUI();
+        };
+
+        // 6. 處理網路異常
+        xhr.onerror = function() {
+            alert('網路異常，請稍後再試');
+            cleanupUI();
+        };
+
+        // 7. 統一收尾：解鎖按鈕並隱藏進度條
+        function cleanupUI() {
+           if (submitBtn) submitBtn.disabled = false;
+           if (progressContainer) progressContainer.classList.add('hidden');
+        }
+        
+        // 正式發送表單
+        xhr.send(new FormData(form));
+    };
+    
+    
+    //     舊的邏輯部份
+    //     fetch("{{ route('messages.store') }}", {
+    //         method: 'POST',
+    //         body: new FormData(form),
+    //         headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }
+    //     })
+    //     .then(r => {
+    //         if (r.status === 419) {
+    //         alert('登入已過期，頁面將自動重新整理');
+    //         window.location.reload();
+    //         return Promise.reject('419');
+    //     }
+    //      return r.json();
+    // })
+
+    // 更舊的寫法
         // .then(d => {
         //     if (d.success && d.data) {
         //         form.reset();
@@ -1005,28 +1095,31 @@
         //     }
         // })
         // 影片還在處理中先不要呼叫
-        .then(d => {
-            if (d.success && d.data) {
-                form.reset();
-                const preview = document.getElementById('fprev-main');
-                if (preview) preview.innerHTML = '';
 
-                // ✅ 影片還在背景處理中：先不要顯示卡片，等處理完成的廣播通知再顯示
-                const isProcessingVideo = d.data.media_type === 'video' && d.data.status === 'processing';
-                if (!isProcessingVideo) {
-                    handleNewMessage(d.data);
-                }
-                } else {
-                    loadMessages(true);
-                    form.reset();
-                }
-        })
-        .catch(err => console.error('貼文失敗:', err))
-        .finally(() => {
-            if (submitBtn) submitBtn.disabled = false;
-        });
-    };
+        // 舊的邏輯
+    //     .then(d => {
+    //         if (d.success && d.data) {
+    //             form.reset();
+    //             const preview = document.getElementById('fprev-main');
+    //             if (preview) preview.innerHTML = '';
 
+    //             // ✅ 影片還在背景處理中：先不要顯示卡片，等處理完成的廣播通知再顯示
+    //             const isProcessingVideo = d.data.media_type === 'video' && d.data.status === 'processing';
+    //             if (!isProcessingVideo) {
+    //                 handleNewMessage(d.data);
+    //             }
+    //             } else {
+    //                 loadMessages(true);
+    //                 form.reset();
+    //             }
+    //     })
+    //     .catch(err => console.error('貼文失敗:', err))
+    //     .finally(() => {
+    //         if (submitBtn) submitBtn.disabled = false;
+    //     });
+    // };
+
+// 更舊的邏輯
 //     window.deleteMsg = function(id) {
 //     if (!confirm('確定要刪除這則訊息嗎？')) return;
 //     id = Number(id);
