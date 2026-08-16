@@ -409,6 +409,8 @@
                     rootEl.outerHTML = HTML(rootMsg);
                 }
             }
+
+            
         }
     };
     
@@ -1008,8 +1010,14 @@
             xhr.upload.onprogress = function(event) {
                 if (event.lengthComputable) {
                     const percentComplete = Math.round((event.loaded / event.total) * 100);
+
                     if (progressBar) progressBar.style.width = percentComplete + '%';
                     if (progressPercent) progressPercent.textContent = percentComplete + '%';
+
+                    // 當傳輸達到 100% 時，先切換顯示文字
+                    if (percentComplete === 100 && progressStatus) {
+                        progressStatus.textContent = '發布中...';
+                    }    
                 }
             };
         }
@@ -1030,25 +1038,60 @@
                 return;
             }
 
-            // 處理成功狀態 (200~299)
+            // 新的處理成功狀態 (HTTP 200~299)
             if (xhr.status >= 200 && xhr.status < 300 && data.success && data.data) {
-                form.reset();    
+                form.reset();
                 const preview = document.getElementById('fprev-main');
                 if (preview) preview.innerHTML = '';
 
-                // ✅ 保留原有的影片處理邏輯：如果影片還在後端轉檔中，先不繪製卡片，等廣播通知
+
+
+            // // 舊的部份
+            // // 處理成功狀態 (200~299)
+            // if (xhr.status >= 200 && xhr.status < 300 && data.success && data.data) {
+            //     form.reset();
+
+                // 新的部分(讓影片轉檔時候會變成發布中)
                 const isProcessingVideo = data.data.media_type === 'video' && data.data.status === 'processing';
-                if (!isProcessingVideo) {
+
+                if (isProcessingVideo) {
+                    // ✅ 回覆影片轉檔中：保持進度條 100% 並顯示「發布中...」
+                    if (progressBar) progressBar.style.width = '100%';
+                    if (progressPercent) progressPercent.textContent = '100%';
+                    if (progressStatus) progressStatus.textContent = '發布中...';
+                    if (submitBtn) submitBtn.disabled = false;
+                } else {
+                    // 一般回覆：直接繪製卡片並隱藏進度條
                     handleNewMessage(data.data);
+                    cleanupUI();
                 }
             } else {
-                // 失敗時的保險機制
                 if (typeof loadMessages === 'function') loadMessages(true);
                 form.reset();
+                cleanupUI();
             }
-
-            cleanupUI();
         };
+            
+
+
+                // 舊的部份
+                // const preview = document.getElementById('fprev-main');
+                // if (preview) preview.innerHTML = ''; 
+
+                // // ✅ 保留原有的影片處理邏輯：如果影片還在後端轉檔中，先不繪製卡片，等廣播通知
+                // const isProcessingVideo = data.data.media_type === 'video' && data.data.status === 'processing';
+                // if (!isProcessingVideo) {
+                //     handleNewMessage(data.data);
+                // }
+            // } else {
+            //     // 失敗時的保險機制
+            //     if (typeof loadMessages === 'function') loadMessages(true);
+            //     form.reset();
+
+        //     }
+
+        //     cleanupUI();
+        // };
 
         // 6. 處理網路異常
         xhr.onerror = function() {
