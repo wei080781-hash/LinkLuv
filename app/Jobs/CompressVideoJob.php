@@ -138,7 +138,7 @@ public function handle()
         throw $e; // 讓 queue 記錄為失敗，方便開 Tinker 查 
     } finally {
             // 歸還 Redis 鎖
-            Cache::forget($lockKey);
+            Cache::lock($lockKey)->forceRelease();
     }
 }
 
