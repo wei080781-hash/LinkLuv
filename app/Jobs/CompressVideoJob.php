@@ -21,7 +21,9 @@ use Illuminate\Support\Facades\Storage;
 class CompressVideoJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
-
+    
+    // 當绑定的 Message 模型在資料庫已被刪除時，自動作廢此 Job，不要重試
+    public $deleteWhenMissingModels = true;
     // 告訴job類別最長允許執行多長時間
     public $timeout = 1800;
 
@@ -124,7 +126,7 @@ public function handle()
         } else {
             throw new Exception("本地壓縮檔案生成失敗，無法上傳 S3");
         }
-    } catch (Exception $e) {
+    } catch (\Throwable $e) {
         \Log::error('影片壓縮或上傳 S3 失敗：' . $e->getMessage());
 
         // 2. 更新資料庫狀態為失敗
@@ -137,9 +139,15 @@ public function handle()
     } finally {
             // 歸還 Redis 鎖
             Cache::forget($lockKey);
-
     }
-}    
+}
 
-
+// 3. 獨立的失敗鉤子方法（跟 handle() 平級，接在 handle() 下方）
+public function failed(?\Throwable $exception)
+    {
+        if ($this->message) {
+            Cache::lock("video-upload-lock:{$this->message->user_id}")->forceRelease();
+            Log::warning("CompressVideoJob 執行失敗，已強制釋放 User {$this->message->user_id} 的影片鎖");
+        }
+    }
 }
