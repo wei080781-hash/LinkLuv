@@ -1,7 +1,7 @@
 
 <x-app-layout>
     <div class="py-12 bg-gray-50 flex-1">
-        <div class="max-w-4xl mx-auto px-6 flex flex-col gap-6">
+        <div class="max-w-2xl mx-auto px-4">
             <div class="flex items-center justify-between w-full h-12">
                 <h2 class="font-semibold text-2xl text-gray-800 leading-tight flex-shrink-0">生活牆</h2>
                 </div>
