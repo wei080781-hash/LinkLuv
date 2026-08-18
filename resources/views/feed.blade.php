@@ -2,21 +2,8 @@
 <x-app-layout>
     <div class="py-12 bg-gray-50 flex-1">
         <div class="max-w-4xl mx-auto px-6 flex flex-col gap-6">
-            <!-- 【第一層】頂部列：左邊標題，右邊進度條 -->
             <div class="flex items-center justify-between w-full h-12">
                 <h2 class="font-semibold text-2xl text-gray-800 leading-tight flex-shrink-0">生活牆</h2>
-
-                <!-- 上傳進度區：預設 hidden 隱藏，完整包裹卡片 -->
-                <div id="upload-progress-container" class="w-72 flex-shrink-0 space-y-2 hidden">
-                    <div class="bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
-                        <div class="flex justify-between items-center mb-1 text-xs text-gray-600">
-                            <span id="upload-status-text" class="font-medium text-blue-600">檔案上傳中...</span>
-                            <span id="upload-percentage" class="font-bold text-blue-600">0%</span>
-                        </div>
-                        <div class="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
-                            <div id="upload-progress-bar" class="bg-blue-500 h-2 rounded-full transition-all duration-150" style="width: 0%"></div>     
-                        </div>
-                    </div>
                 </div>
             </div>
             
@@ -38,6 +25,18 @@
         <button onclick="closeLightbox()"
             class="absolute top-4 right-5 text-white text-4xl leading-none bg-transparent border-none cursor-pointer">✕</button>
         <div id="lightbox-content"></div>
+    </div>
+
+    {{-- 上傳 Toast 通知：固定右下角，預設隱藏 --}}
+    <div id="upload-toast" class="upload-toast hidden">
+        <div class="upload-toast-icon">
+             <div id="upload-toast-spinner" class="upload-toast-spinner"></div>
+             <span id="upload-toast-emoji" class="upload-toast-emoji hidden"></span>
+        </div>
+        <div class="upload-toast-body">
+             <span id="upload-toast-text">檔案上傳中...</span>
+        </div>
+        <button type="button" onclick="hideToastNow()" class="upload-toast-close" aria-label="關閉">✕</button>
     </div>
 
     <style>
@@ -118,6 +117,107 @@
         display: block;
         cursor: pointer;
     }
+
+    /* ============================================================
+       上傳 Toast 通知樣式（取代原本的進度條）
+    ============================================================ */
+     .upload-toast {
+        position: fixed;
+        right: 20px;
+        bottom: 20px;
+        z-index: 60;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 220px;
+        max-width: 320px;
+        padding: 12px 14px;
+        background: #1f2937;
+        color: #fff;
+        border-radius: 12px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+        opacity: 0;
+        transform: translateY(12px);
+        transition: opacity 0.25s ease, transform 0.25s ease;
+    }
+ 
+    .upload-toast.hidden {
+        display: none;
+    }
+ 
+    .upload-toast.show {
+        opacity: 1;
+        transform: translateY(0);
+    }
+ 
+    .upload-toast.fade-out {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+ 
+    .upload-toast-icon {
+        flex-shrink: 0;
+        width: 20px;
+        height: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+ 
+    .upload-toast-spinner {
+        width: 18px;
+        height: 18px;
+        border: 2.5px solid rgba(255, 255, 255, 0.25);
+        border-top-color: #60a5fa;
+        border-radius: 50%;
+        animation: toast-spin 0.8s linear infinite;
+    }
+ 
+    .upload-toast-spinner.hidden {
+        display: none;
+    }
+ 
+    .upload-toast-emoji {
+        font-size: 18px;
+        line-height: 1;
+    }
+ 
+    .upload-toast-emoji.hidden {
+        display: none;
+    }
+ 
+    @keyframes toast-spin {
+        to { transform: rotate(360deg); }
+    }
+ 
+    .upload-toast-body {
+        flex: 1;
+        font-size: 13px;
+        font-weight: 500;
+    }
+ 
+    .upload-toast.success .upload-toast-body {
+        color: #86efac;
+    }
+ 
+    .upload-toast.error .upload-toast-body {
+        color: #fca5a5;
+    }
+ 
+    .upload-toast-close {
+        flex-shrink: 0;
+        background: transparent;
+        border: none;
+        color: #9ca3af;
+        font-size: 14px;
+        cursor: pointer;
+        padding: 0;
+        line-height: 1;
+    }
+ 
+    .upload-toast-close:hover {
+        color: #fff;
+    }
     </style>
 
     <script>
@@ -127,6 +227,10 @@
     window.globalMsgMap = new Map();
     window.expandedSet = new Set();
     window.currentUserId = {{ auth()->id() ?? 'null' }};
+
+    // 🎯 影片上傳號碼牌：目前是否有一支影片正在後端處理中
+    //    有值時，前端會擋下「下一支影片」的送出（圖片、文字不受影響）
+    window.pendingVideoUploadId = null;
 
     let currentPage = 1;
     let isLoading = false;
@@ -171,6 +275,7 @@
     }
 
     function setupEcho() {
+        // 公開頻道：畫面渲染用（貼文/回覆/刪除/按讚）
         window.Echo.channel('wall-channel')
             .listen('.message.created', (e) => {
                 handleNewMessage(e.message);
@@ -180,7 +285,7 @@
                 handleNewMessage(e.message);
             })
 
-            // 刪除監聽器
+        
             .listen('.message.deleted', (e) => {
              handleDeletedMessage(e);
             })
@@ -188,8 +293,26 @@
             .listen('.message.liked', (e) => {
             handleLikeBroadcast(e);
             });
-            
-            
+    
+        // 🎯 私人頻道：只用來通知「我自己」的上傳狀態，不負責畫面渲染
+        //    ⚠️ 事件名稱 '.upload.completed' / '.upload.failed' 需與後端 Event 對齊，
+        //       後端 broadcastAs() 完成後在這裡確認名稱是否一致。
+        if (window.currentUserId) {
+           window.Echo.private('user.' + window.currentUserId)
+               .listen('.upload.completed', (e) => {
+                    console.log('📡 [私人頻道] 上傳完成通知', e);
+                    window.pendingVideoUploadId = null;
+                    showToast('發布成功！', 'success');
+                    hideToastWithDelay(5000);
+                })
+                 .listen('.upload.failed', (e) => {
+                    console.log('📡 [私人頻道] 上傳失敗通知', e);
+                    window.pendingVideoUploadId = null;
+                    showToast(e?.message || '上傳失敗，請重新上傳', 'error');
+                    hideToastWithDelay(5000);
+                });
+        }            
+ 
     }
 
     
@@ -276,6 +399,8 @@
     // =========================================================
     // 4. 統一處理新訊息入口
     //    WebSocket、submitPost、submitReply 全部走這裡
+    //    ⚠️ 新模式下：後端在影片轉檔完成前「完全不會」廣播到 wall-channel，
+    //    所以這裡實際上不會再收到 status === 'processing' 的訊息了。
     // =========================================================
     
     window.handleNewMessage = function(newMsg) {
@@ -285,17 +410,8 @@
         newMsg.parent_id == null
             ? null
             : Number(newMsg.parent_id);
-        console.log(typeof newMsg.id);
-        console.log(typeof newMsg.parent_id);
-        console.log(
-        [...window.globalMsgMap.keys()]
-            .slice(0,10)
-            .map(k => [k, typeof k])
-        );
 
-        console.log("parent_id =", newMsg.parent_id);
-
-        // 去重防呆：已存在就跳過
+        // 去重防呆：已存在就跳過(更新既有訊息內容)
         if (window.globalMsgMap.has(newMsg.id)) {
             const existing = window.globalMsgMap.get(newMsg.id);
             const children = existing.children || [];
@@ -368,25 +484,17 @@
             // 全新貼文：插到最頂端
             const list = document.getElementById('messages-list');
             if (list) list.insertAdjacentHTML('afterbegin', buildRootHTML(newMsg));
-                console.log("===== 插入後 =====");
-                console.log(document.getElementById(`msg-${newMsg.id}`));
-                console.log(document.getElementById('messages-list').innerHTML);
         } else {
             // 回覆：找到根貼文並局部重繪
-
-            console.log("========== handleNewMessage ==========");
-            console.log("newMsg =", newMsg);
             const rootId = findRootId(newMsg.parent_id);
-            console.log("rootId =", rootId);
             const trueParent = window.globalMsgMap.get(newMsg.parent_id);
-            console.log("trueParent =", trueParent);
+            
+
             if (trueParent) {
-                console.log("children before =", trueParent.children);
                 if (!trueParent.children) trueParent.children = [];
                 // 檢查是否重複，不重複才塞入
                 if (!trueParent.children.some(c => c.id === newMsg.id)) {   
                     trueParent.children.push(newMsg);
-                    console.log("children after =", trueParent.children);
                 }
             }
             
@@ -394,9 +502,8 @@
             window.expandedSet.add(rootId);
 
             const rootEl = document.getElementById(`msg-${rootId}`);
-            console.log("rootEl =", rootEl);
             const rootMsg = window.globalMsgMap.get(rootId);
-            console.log("rootMsg =", rootMsg);
+            
 
             if (rootEl && rootMsg) {
                 // 防護：若使用者正在該卡片內打字，跳過重繪避免焦點丟失
@@ -405,12 +512,10 @@
                 const hasTyped = activeInput && activeInput.value.trim() !== '';
 
                 if (!isFocused && !hasTyped) {
-                    // 核心重繪：此時記憶體結構已正確，深層留言將會完美渲染
-                    rootEl.outerHTML = HTML(rootMsg);
+                    // 🛠️ 修正：原本這裡誤寫成 HTML(rootMsg)，已修正為 buildRootHTML(rootMsg)
+                    rootEl.outerHTML = buildRootHTML(rootMsg);
                 }
             }
-
-            
         }
     };
     
@@ -512,6 +617,7 @@
             ? `<button onclick="toggleReplies(${msg.id}, ${count})" id="tbtn-${msg.id}" class="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700 mt-1 select-none bg-transparent border-none cursor-pointer p-0">
                 <span class="toggle-arrow ${isOpen ? 'rotate-180' : ''}">▼</span>
                 <span id="tlabel-${msg.id}">${isOpen ? '隱藏回覆' : `查看 ${count} 則回覆`}</span>
+
                </button>`
             : '';
 
@@ -670,6 +776,8 @@
             return `<div class="msg-media"><img src="${imgUrl}" onclick="openLightbox('image','${imgUrl}')"></div>`;
         }
         // 影片的處理
+        // ⚠️ 新模式下，其他使用者理論上不會再收到 status === 'processing' 的貼文
+        //    （因為後端在轉檔完成前不會廣播），這兩段留著作為保險，不會被觸發到。
         if (msg.media_type === 'video') {
            // 壓縮處理中：顯示轉圈動畫
            if (msg.status === 'processing') {
@@ -700,6 +808,72 @@
         if (!str) return '';
         return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
+
+    // =========================================================
+    // 9. 🆕 新增整節：上傳 Toast 通知 Helper 函式
+    //    （原本這裡完全沒有這節，是取代進度條 Helper 新增的）
+    // =========================================================
+    let toastHideTimer = null;
+
+    // 🆕 新增：判斷檔案是不是影片，用來決定要不要套用「一次只能傳一支」的鎖
+    function isVideoFile(file) {
+        return !!(file && file.type && file.type.startsWith('video/'));
+    }
+
+    // 🆕 新增：顯示/更新 Toast。type: 'info'（灰底轉圈）｜'processing'（轉圈）｜'success'（綠字）｜'error'（紅字）
+     function showToast(message, type = 'info') {
+        const toast = document.getElementById('upload-toast');
+        const text = document.getElementById('upload-toast-text');
+        const spinner = document.getElementById('upload-toast-spinner');
+        const emoji = document.getElementById('upload-toast-emoji');
+        if (!toast || !text) return;
+ 
+        if (toastHideTimer) {
+            clearTimeout(toastHideTimer);
+            toastHideTimer = null;
+        }
+ 
+        toast.classList.remove('hidden', 'fade-out', 'success', 'error');
+        text.textContent = message;
+ 
+        if (type === 'success' || type === 'error') {
+            spinner.classList.add('hidden');
+            emoji.classList.remove('hidden');
+            emoji.textContent = type === 'success' ? '✅' : '⚠️';
+            toast.classList.add(type);
+        } else {
+            spinner.classList.remove('hidden');
+            emoji.classList.add('hidden');
+        }
+ 
+        requestAnimationFrame(() => toast.classList.add('show'));
+    }
+ 
+    // 🆕 新增：只換文字，不重置整個 Toast 狀態（例如 100% 時「發布中...」）
+    function updateToastMessage(message) {
+        const text = document.getElementById('upload-toast-text');
+        if (text) text.textContent = message;
+    }
+ 
+    // 🆕 新增：延遲後自動淡出（success / error 用，通常 5000ms）
+    function hideToastWithDelay(delay = 5000) {
+        if (toastHideTimer) clearTimeout(toastHideTimer);
+        toastHideTimer = setTimeout(() => {
+            hideToastNow();
+        }, delay);
+    }
+ 
+    // 🆕 新增：立即隱藏 Toast，就是你剛才問的「✕」關閉按鈕呼叫的函式
+    window.hideToastNow = function() {
+        const toast = document.getElementById('upload-toast');
+        if (!toast) return;
+        toast.classList.remove('show');
+        toast.classList.add('fade-out');
+        setTimeout(() => {
+            toast.classList.add('hidden');
+            toast.classList.remove('fade-out', 'success', 'error');
+        }, 250);
+    };
 
     // =========================================================
     // 9. 互動事件函式
@@ -793,248 +967,204 @@
         }
     };
 
-    // ✅ 完美修正後的 submitReply 函式
+    // 🔄 submitReply 改用 XHR + Toast
     window.submitReply = function(e, rootId) {
-        console.log('🚀 觸發 submitReply！有沒有選檔案:', hasFile);
         e.preventDefault();
         const form = e.target;
         const contentInput = form.querySelector('input[name="content"]');
         const fileInput = form.querySelector('input[type="file"]');
         const submitBtn = form.querySelector('button[type="submit"]');
+        const file = fileInput && fileInput.files && fileInput.files[0];
+        const hasFile = !!file;
+        // 🐛 修正 bug：原本這裡「上面」有一行 console.log('...', hasFile)
+        //    印在 const hasFile 宣告「之前」，會直接噴 ReferenceError（TDZ）。
+        //    已經把 hasFile 的宣告移到最前面，並拿掉那行過早的 console.log。
 
-        // 防呆：確認是否有選擇檔案
-        const hasFile = fileInput && fileInput.files && fileInput.files.length > 0;
-
-        // 1. 防呆：如果沒有文字也沒有檔案，就不處理
-        if (!contentInput.value.trim() && (!fileInput || !fileInput.files.length)) {
+        // 1. 防呆：沒文字也沒檔案，不處理
+        if (!contentInput.value.trim() && !hasFile) {
             alert('請輸入回覆內容或上傳媒體');
             return;
         }
+
+        // 2. 防呆：檔案大小限制 10MB
+        if (hasFile && file.size > 10 * 1024 * 1024) {
+            alert('檔案太大，最大限制為 10MB');
+            fileInput.value = '';
+            return;
+        }
+
+        // 🆕 新增：影片上傳鎖，若已有一支影片在後端處理中，擋下這次「影片」送出
+        //    （純文字、圖片完全不受影響）
+        if (hasFile && isVideoFile(file) && window.pendingVideoUploadId) {
+            alert('您有一支影片正在處理中，請稍候完成後再上傳下一支影片');
+            return;
+        }
+
 
         // 防重複點擊鎖定
         if (submitBtn) submitBtn.disabled = true;
 
         const msgId = form.querySelector('input[name="parent_id"]')?.value;
 
-    //     fetch("{{ route('messages.store') }}", {
-    //         method: 'POST',
-    //         body: new FormData(form),
-    //         headers: { 
-    //             'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-    //             // 讓LARAVEL 知道我要明確需要JSON格式而不是傳統(HTML)變成302錯誤報錯。
-    //             'Accept': 'application/json'
-    //         }
-    //     })
-    //     .then(async r => {
-    //         if (r.status === 419) {
-    //         alert('登入已過期，頁面將自動重新整理');
-    //         window.location.reload();
-    //         return Promise.reject('419');
-    //     }
-        
-    //     const data = await r.json();
-
-    //     if (r.status === 422) {
-    //         const firstError = data.errors
-    //             ? Object.values(data.errors)[0][0]
-    //             : (data.message || '發生錯誤，請重新確認內容');
-    //         alert(firstError);
-    //         return Promise.reject('validation_failed');
-    //     }
-
-    //     return data;
-    // })
-    //     .then(d => {
-    //         console.log("收到資料：", d);
-    //         if (d.success && d.data) {
-    //             // 1. 先清空表單，釋放 hasTyped 狀態
-    //             form.reset();
-    //             contentInput.blur(); // 這一行是要在呼叫handleNewMessage之前,主動把輸入框拿掉
-    //             if (msgId) {
-    //                 const preview = document.getElementById(`fprev-${msgId}`);
-    //                 if (preview) preview.innerHTML = '';
-    //             }
-    //             console.log("開始更新畫面");
-    //             // 2. 再安全觸發 DOM 重繪
-    //             handleNewMessage(d.data);
-    //             console.log("更新完成");
-    //         }
-    //     })
-    //     .catch(err => {
-    //         if (err !== '419' && err !== 'validation_failed') {
-    //         console.error('發送失敗:', err);
-    //         }
-    //     })
-    //     .finally(() => {
-    //         // 解鎖按鈕
-    //         if (submitBtn) submitBtn.disabled = false;
-    //     });
-    // 新的修改部分
-        // 取得進度條 DOM 元素
-        const progressContainer = document.getElementById('upload-progress-container');
-        const progressBar = document.getElementById('upload-progress-bar');
-        const progressPercent = document.getElementById('upload-percentage');
-        const progressStatus = document.getElementById('upload-status-text');
-
-        // 如果「有上傳檔案」，展開進度條並初始化狀態
-        if (hasFile && progressContainer) {
-            progressContainer.classList.remove('hidden');
-            if (progressBar) progressBar.style.width = '0%';
-            if (progressPercent) progressPercent.textContent = '0%';
-            if (progressStatus) progressStatus.textContent = '檔案上傳中...';
+        // 🔄 取代：原本這裡展開進度條 DOM，現在改成呼叫 showToast()
+        if (hasFile) {
+            showToast('檔案上傳中...', 'info');
         }
-        
-        // 建立 XHR 物件進行非同步傳輸
+ 
         const xhr = new XMLHttpRequest();
         xhr.open('POST', "{{ route('messages.store') }}", true);
-
-        // 設定 Request Headers
         xhr.setRequestHeader('X-CSRF-TOKEN', document.querySelector('meta[name="csrf-token"]').content);
         xhr.setRequestHeader('Accept', 'application/json');
 
-        // 2. 監聽上傳進度 (Upload Progress)
+        // 🔄 取代：原本這裡逐步更新進度條百分比，現在只在傳輸「完成」那一刻換文字成「發布中...」
         if (hasFile && xhr.upload) {
-           xhr.upload.onprogress = function(event) {
-               if (event.lengthComputable) {
-                  // 計算目前完成百分比
-                  const percentComplete = Math.round((event.loaded / event.total) * 100);
-
-                  // 動態更新前端畫面
-                  if (progressBar) progressBar.style.width = percentComplete + '%';
-                  if (progressPercent) progressPercent.textContent = percentComplete + '%';
+            xhr.upload.onprogress = function(event) {
+                if (event.lengthComputable && event.loaded === event.total) {
+                    updateToastMessage('發布中...');
                 }
-             };
+            };
         }
-
-        // 3. 請求完成後的處理
+ 
         xhr.onload = function() {
+            if (submitBtn) submitBtn.disabled = false;
+ 
             let data = {};
             try {
                 data = JSON.parse(xhr.responseText);
             } catch (err) {
                 console.error('JSON 解析失敗:', err);
             }
-            
-            // 處理 419 (登入 Session 過期)
+ 
             if (xhr.status === 419) {
                 alert('登入已過期，頁面將自動重新整理');
                 window.location.reload();
                 return;
             }
-
-            // 處理 422 (表單驗證錯誤)
+ 
             if (xhr.status === 422) {
                 const firstError = data.errors
                     ? Object.values(data.errors)[0][0]
                     : (data.message || '發生錯誤，請重新確認內容');
                 alert(firstError);
-                cleanupUI();
+                if (hasFile) { showToast(firstError, 'error'); hideToastWithDelay(5000); }
                 return;
             }
             
-            // 處理 200~299 成功狀態 
             if (xhr.status >= 200 && xhr.status < 300 && data.success && data.data) {
                 form.reset();
-                if (contentInput) contentInput.blur();
-
+                // ✅ 補回：contentInput.blur()，你更早之前的「乾淨版」不小心漏掉這行，
+                //    沒有它的話，若輸入框仍是 focus 狀態，handleNewMessage 的「使用者正在打字」
+                //    保護機制會誤判，新回覆送出後畫面不會立刻更新。
+                contentInput.blur();
+                // ✅ 補回：清空媒體預覽，同樣是之前「乾淨版」漏掉的部分
                 if (msgId) {
-                   const preview = document.getElementById(`fprev-${msgId}`);
-                   if (preview) preview.innerHTML = '';
+                    const preview = document.getElementById(`fprev-${msgId}`);
+                    if (preview) preview.innerHTML = '';
                 }
-                
-                console.log("開始更新畫面");
-                handleNewMessage(data.data);
-                console.log("更新完成");
+ 
+                const isProcessingVideo = data.data.media_type === 'video' && data.data.status === 'processing';
+ 
+                if (isProcessingVideo) {
+                    // 🆕 新增：領號碼牌，Toast 停在「處理中」，等私人頻道通知才會被清掉
+                    window.pendingVideoUploadId = data.data.id;
+                    showToast('影片處理中...', 'processing');
+                } else {
+                    handleNewMessage(data.data);
+                    if (hasFile) {
+                        showToast('發布成功！', 'success');
+                        hideToastWithDelay(5000);
+                    }
+                }
             } else {
-                alert(data.message || '發送失敗，請稍後再試');
+                if (typeof loadMessages === 'function') loadMessages(true);
+                form.reset();
+                if (hasFile) {
+                    showToast(data.message || '發送失敗，請稍後再試', 'error');
+                    hideToastWithDelay(5000);
+                }
             }
-            
-            cleanupUI();
         };
 
-        // 4. 處理網路異常
         xhr.onerror = function() {
-            alert('網路異常，請稍後再試');
-            cleanupUI();
+            if (submitBtn) submitBtn.disabled = false;
+            if (hasFile) {
+                showToast('網路異常，請稍後再試', 'error');
+                hideToastWithDelay(5000);
+            } else {
+                alert('網路異常，請稍後再試');
+            }
         };
+        // 🐛 修正 bug：原本這裡呼叫 cleanupUI()，但 function cleanupUI() {...} 整段被註解掉了，
+        //    一樣會噴 ReferenceError。已經拿掉這個依賴，改成上面 inline 處理解鎖與 Toast。
 
-        // 統一收尾：解鎖按鈕並隱藏進度條
-        // function cleanupUI() {
-        //     if (submitBtn) submitBtn.disabled = false;
-        //     if (progressContainer) progressContainer.classList.add('hidden');
-        // }
-
-        // 發送表單
         xhr.send(new FormData(form));
     }; 
 
+    // 🔄 取代：submitPost 邏輯與 submitReply 對齊，同步改用 Toast
     window.submitPost = function(e) {
         e.preventDefault();
         const form = e.target;
         const fi = form.querySelector('input[type="file"]');
         const submitBtn = form.querySelector('button[type="submit"]');
-
-        //防呆:檢查檔案大小 (預先攔截超過 10MB 的檔案)新增部分
-        const hasFile = fi && fi.files && fi.files.length > 0;
-        // 原有
-        if (fi?.files.length > 0 && fi.files[0].size > 10 * 1024 * 1024) {
+        const file = fi && fi.files && fi.files[0];
+        const hasFile = !!file;
+ 
+        if (hasFile && file.size > 10 * 1024 * 1024) {
             alert('檔案太大，最大限制為 10MB');
             fi.value = '';
+            return;
+        }
+ 
+        // 🆕 新增：影片上傳鎖檢查
+        if (hasFile && isVideoFile(file) && window.pendingVideoUploadId) {
+            alert('您有一支影片正在處理中，請稍候完成後再上傳下一支影片');
             return;
         }
 
         // 防重複點擊鎖定
         if (submitBtn) submitBtn.disabled = true;
         // 新的部分
-        // 2. 取得進度條 DOM 元素並初始化狀態
-        const progressContainer = document.getElementById('upload-progress-container');
-        const progressBar = document.getElementById('upload-progress-bar');
-        const progressPercent = document.getElementById('upload-percentage');
-        const progressStatus = document.getElementById('upload-status-text');
-
-        if (hasFile && progressContainer) {
-            progressContainer.classList.remove('hidden');
-            if (progressBar) progressBar.style.width = '0%';
-            if (progressPercent) progressPercent.textContent = '0%';
-            if (progressStatus) progressStatus.textContent = '檔案上傳中...';
+        // 🔄 取代：進度條 → Toast
+        if (hasFile) {
+            showToast('檔案上傳中...', 'info');
         }
-
-        // 3. 建立 XHR 物件進行非同步傳輸
+ 
         const xhr = new XMLHttpRequest();
         xhr.open('POST', "{{ route('messages.store') }}", true);
         xhr.setRequestHeader('X-CSRF-TOKEN', document.querySelector('meta[name="csrf-token"]').content);
         xhr.setRequestHeader('Accept', 'application/json');
-
-        // 4. 監聽上傳進度 (即時計算傳輸百分比)
+ 
         if (hasFile && xhr.upload) {
             xhr.upload.onprogress = function(event) {
-                if (event.lengthComputable) {
-                    const percentComplete = Math.round((event.loaded / event.total) * 100);
-
-                    if (progressBar) progressBar.style.width = percentComplete + '%';
-                    if (progressPercent) progressPercent.textContent = percentComplete + '%';
-
-                    // 當傳輸達到 100% 時，先切換顯示文字
-                    if (percentComplete === 100 && progressStatus) {
-                        progressStatus.textContent = '發布中...';
-                    }    
+                if (event.lengthComputable && event.loaded === event.total) {
+                    updateToastMessage('發布中...');
                 }
             };
         }
+ 
 
-        // 5. 請求完成後的處理
         xhr.onload = function() {
+            if (submitBtn) submitBtn.disabled = false;
+ 
             let data = {};
             try {
                 data = JSON.parse(xhr.responseText);
             } catch (err) {
                 console.error('JSON 解析失敗:', err);
             }
-
-            // 處理 Session 過期 (419)
+ 
             if (xhr.status === 419) {
                 alert('登入已過期，頁面將自動重新整理');
                 window.location.reload();
+                return;
+            }
+ 
+            // 🆕 新增：409 處理
+            if (xhr.status === 409) {
+                const msg = data.message || '您有一支影片正在處理中，請稍候完成後再上傳';
+                alert(msg);
+                showToast(msg, 'error');
+                hideToastWithDelay(5000);
                 return;
             }
 
@@ -1043,145 +1173,43 @@
                 form.reset();
                 const preview = document.getElementById('fprev-main');
                 if (preview) preview.innerHTML = '';
-
-
-
-            // // 舊的部份
-            // // 處理成功狀態 (200~299)
-            // if (xhr.status >= 200 && xhr.status < 300 && data.success && data.data) {
-            //     form.reset();
-
-                // 新的部分(讓影片轉檔時候會變成發布中)
+ 
                 const isProcessingVideo = data.data.media_type === 'video' && data.data.status === 'processing';
 
                 if (isProcessingVideo) {
-                    // ✅ 回覆影片轉檔中：保持進度條 100% 並顯示「發布中...」
-                    if (progressBar) progressBar.style.width = '100%';
-                    if (progressPercent) progressPercent.textContent = '100%';
-                    if (progressStatus) progressStatus.textContent = '發布中...';
-                    if (submitBtn) submitBtn.disabled = false;
+                    window.pendingVideoUploadId = data.data.id;
+                    showToast('影片處理中...', 'processing');
                 } else {
-                    // 一般回覆：直接繪製卡片並隱藏進度條
                     handleNewMessage(data.data);
-                    cleanupUI();
+                    if (hasFile) {
+                        showToast('發布成功！', 'success');
+                        hideToastWithDelay(5000);
+                    }
                 }
             } else {
                 if (typeof loadMessages === 'function') loadMessages(true);
                 form.reset();
-                cleanupUI();
+                if (hasFile) {
+                    showToast(data.message || '發送失敗，請稍後再試', 'error');
+                    hideToastWithDelay(5000);
+                }
             }
         };
             
-
-
-                // 舊的部份
-                // const preview = document.getElementById('fprev-main');
-                // if (preview) preview.innerHTML = ''; 
-
-                // // ✅ 保留原有的影片處理邏輯：如果影片還在後端轉檔中，先不繪製卡片，等廣播通知
-                // const isProcessingVideo = data.data.media_type === 'video' && data.data.status === 'processing';
-                // if (!isProcessingVideo) {
-                //     handleNewMessage(data.data);
-                // }
-            // } else {
-            //     // 失敗時的保險機制
-            //     if (typeof loadMessages === 'function') loadMessages(true);
-            //     form.reset();
-
-        //     }
-
-        //     cleanupUI();
-        // };
-
-        // 6. 處理網路異常
         xhr.onerror = function() {
-            alert('網路異常，請稍後再試');
-            cleanupUI();
+            if (submitBtn) submitBtn.disabled = false;
+            if (hasFile) {
+                showToast('網路異常，請稍後再試', 'error');
+                hideToastWithDelay(5000);
+            } else {
+                alert('網路異常，請稍後再試');
+            }
         };
 
-        // 7. 統一收尾：解鎖按鈕並隱藏進度條
-        function cleanupUI() {
-           if (submitBtn) submitBtn.disabled = false;
-           if (progressContainer) progressContainer.classList.add('hidden');
-        }
-        
         // 正式發送表單
         xhr.send(new FormData(form));
     };
     
-    
-    //     舊的邏輯部份
-    //     fetch("{{ route('messages.store') }}", {
-    //         method: 'POST',
-    //         body: new FormData(form),
-    //         headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }
-    //     })
-    //     .then(r => {
-    //         if (r.status === 419) {
-    //         alert('登入已過期，頁面將自動重新整理');
-    //         window.location.reload();
-    //         return Promise.reject('419');
-    //     }
-    //      return r.json();
-    // })
-
-    // 更舊的寫法
-        // .then(d => {
-        //     if (d.success && d.data) {
-        //         form.reset();
-        //         const preview = document.getElementById('fprev-main');
-        //         if (preview) preview.innerHTML = '';
-        //         handleNewMessage(d.data);
-        //     } else {
-        //         loadMessages(true);
-        //         form.reset();
-        //     }
-        // })
-        // 影片還在處理中先不要呼叫
-
-        // 舊的邏輯
-    //     .then(d => {
-    //         if (d.success && d.data) {
-    //             form.reset();
-    //             const preview = document.getElementById('fprev-main');
-    //             if (preview) preview.innerHTML = '';
-
-    //             // ✅ 影片還在背景處理中：先不要顯示卡片，等處理完成的廣播通知再顯示
-    //             const isProcessingVideo = d.data.media_type === 'video' && d.data.status === 'processing';
-    //             if (!isProcessingVideo) {
-    //                 handleNewMessage(d.data);
-    //             }
-    //             } else {
-    //                 loadMessages(true);
-    //                 form.reset();
-    //             }
-    //     })
-    //     .catch(err => console.error('貼文失敗:', err))
-    //     .finally(() => {
-    //         if (submitBtn) submitBtn.disabled = false;
-    //     });
-    // };
-
-// 更舊的邏輯
-//     window.deleteMsg = function(id) {
-//     if (!confirm('確定要刪除這則訊息嗎？')) return;
-//     id = Number(id);
-//     fetch(`/messages/${id}`, {
-//         method: 'DELETE',
-//         headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }
-//     }).then(r => r.json()).then(d => {
-//         if (d.success) {
-//             // 改成跟廣播收到時一樣的局部移除邏輯
-//             const msg = window.globalMsgMap.get(id);
-//             handleDeletedMessage({
-//                 messageId: id,
-//                 parentId: msg?.parent_id ?? null,
-//                 rootId: null  // 讓 handleDeletedMessage 自己往上找 root
-//             });
-//         }
-//     });
-// };
-
     //新的修改
     window.deleteMsg = function(id) {
     if (!confirm('確定要刪除這則訊息嗎？')) return;
@@ -1254,29 +1282,18 @@ window.cancelEdit = function(id, orig) {
         }
     });
 };
+
     window.toggleLike = function(id) {
         id = Number(id);
-        
-        console.log(`[探針 1][點擊觸發] 準備發送點讚請求，目標 ID: ${id}, 型態: ${typeof id}`);
-        // 🚀 直接發送請求，不提前抓取可能變動的 DOM 節點
         fetch(`/messages/${id}/like`, {
             method: 'POST',
             headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }
         })
         .then(r => r.json())
         .then(d => {
-            console.log(`[探針 2][後端回應抵達] 收到後端回傳物件:`, d);
-
             // ✅ 收到回應後的最後一刻，才抓取網頁上當下最新、活著的節點
             const btn = document.querySelector(`#msg-${id} .like-btn, [data-id="${id}"] .like-btn`);
             const countEl = document.getElementById(`lcount-${id}`);
-
-            console.log(`[探針 3][DOM 節點盤查]`, {
-            "搜尋目標按鈕": `#msg-${id} .like-btn`,
-            "抓取到的按鈕結果 (btn)": btn,
-            "搜尋目標計數器": `lcount-${id}`,
-            "抓取到的計數器結果 (countEl)": countEl
-            });
 
             // ✅ 防空檢查：若在等待期間留言被刪除或找不到節點，直接結束不執行，防止程式當機
             if (!btn || !countEl) {
@@ -1308,10 +1325,6 @@ window.cancelEdit = function(id, orig) {
                     console.warn(`[探針 5-2][📢 警告] globalMsgMap 裡面竟然找不到 ID: ${id} 的留言！`);
                 }
                 } else {
-                    // 📡 探針 6：確認走入路線 B (後端沒給數字，前端自立自強模擬)
-                    console.log(`[探針 6][執行路線 B] 後端沒給數字，啟動前端模擬計算`);
-
-                    // 路線 B：後端未回傳數據時的備用前端模擬邏輯
                     const isLiked = btn.classList.contains('text-pink-500');
                     let count = parseInt(countEl.textContent) || 0;
                     if (isLiked) {
@@ -1332,20 +1345,19 @@ window.cancelEdit = function(id, orig) {
                         msg.is_liked = !isLiked;
                     }
             }
-
-            // 📡 探針 7：確認整套點讚邏輯全部執行完畢
-            console.log(`[探針 7][流程圓滿結束] ID: ${id} 的點讚畫面更新動作已全部派發完畢。`);
         })
         .catch(err => {
-        console.error('[探針 8][❌ 嚴重錯誤] 點讚發送失敗，錯誤詳細訊息:', err);
+         console.error('點讚發送失敗:', err);
     });
-};    
+};
 
+// 🔄 取代：檔案大小上限從原本的 50MB 改成 10MB，跟 submitPost/submitReply 的送出限制對齊
+//    （原本這裡是 50MB，跟送出時的 10MB 限制不一致，選了 30MB 檔案預覽會過但送出會被擋，體驗矛盾）
     window.previewMedia = function(input, previewId) {
         const file = input.files[0];
         if (!file) return;
-        if (file.size > 50 * 1024 * 1024) {
-            alert('檔案太大，最大限制為 50MB');
+        if (file.size > 10 * 1024 * 1024) {
+            alert('檔案太大，最大限制為 10MB');
             input.value = '';
             return;
         }

@@ -17,10 +17,13 @@ class MessageController extends Controller
     {
         $page = $request->get('page', 1);
         $perPage = 20;
+
         // 1. 從 Redis 讀取全域訊息快取 (若無則查詢 DB 並存入 1 小時)
         $messages = Cache::remember("messages_feed_page_{$page}", 60, function () use ($page, $perPage) {
              return Message::with(['user', 'parent.user'])
                  ->withCount('likes')
+                //  新增
+                ->where('status', 'ready')
                  // ★ 關鍵排序改動：
                  ->orderBy('thread_id', 'DESC') // 1. 讓最新發布的討論串（主留言）永遠排在最上面
                  ->orderBy('path', 'ASC')       // 2. 在同一個討論串內部，依照物化路徑正序排，確保父在子前
@@ -81,6 +84,18 @@ class MessageController extends Controller
                 $mediaPath = $this->handleImageUpload($file);
                 $mediaType = 'image';
             } elseif (str_contains($mime, 'video')) {
+                // Redis 鎖：限制同一使用者同時只能上傳與轉檔一支影片 
+                $userId = auth()->id();
+                $lockKey = "video-upload-lock:{$userId}";
+                $acquired = Cache::lock($lockKey, 3600)->get();
+
+                if (!$acquired) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => '您有一支影片正在處理中，請稍候完成後再上傳。'
+                    ], 409);
+                }
+
                 // 影片：先存入本地原始路徑(public)，讓背景 Job 可以用 FFmpeg 讀取壓縮
                 $mediaPath = $file->store('videos', 'public');
                 $mediaType = 'video';
@@ -134,22 +149,33 @@ class MessageController extends Controller
         if ($parentId) {
             $this->storeClosure($message->id, $parentId);
         } else {
-            \Illuminate\Support\Facades\DB::table('message_closure')->insert(['ancestor' => $message->id, 'descendant' => $message->id]);
-        }
-
-        // 若為影片，啟動背景壓縮任務
-        if ($mediaType === 'video') {
-            $message->update(['status' => 'processing']);
-            //為了不出現403錯誤所以先隱藏
-            // // 使用 ->toOthers() 可以完美排除正在操作上傳的 A 帳號，避免 A 帳號畫面打架
-            // broadcast(new \App\Events\MessageStatusUpdated($message))->toOthers();
-            // CompressVideoJob::dispatch($message);
+            DB::table('message_closure')->insert(['ancestor' => $message->id, 'descendant' => $message->id]);
         }
 
         // 清除快取並回傳
         for ($i = 1; $i <= 10; $i++) {
             \Illuminate\Support\Facades\Cache::forget("messages_feed_page_{$i}");
-        } 
+        }
+        
+        $message->load(['user', 'parent.user']);
+        $message->likes_count = 0;
+        $message->is_liked = false;
+        $message->parent_user_name = $message->parent?->user?->name ?? null;
+
+        if ($mediaType !== 'video') {
+            broadcast(new \App\Events\MessageCreated($message))->toOthers();
+        }
+
+        if ($mediaType === 'video') {
+            CompressVideoJob::dispatch($message);
+        }
+
+        return response()->json(['success' => true, 'data' => $message]);
+
+    }
+        
+
+        
 
         // 💡【本次新增的核心邏輯】
         // 1. 預先載入 user 關聯，讓前端能順利讀取到頭像與名稱
@@ -169,18 +195,11 @@ class MessageController extends Controller
 	// \Log::info('準備回傳給前端時的 status: ' . $message->status);
     //     return response()->json(['success' => true, 'data' => $message]);
      // 改動讓影片後端完成才會顯示
-        $message->load(['user', 'parent.user']);
-        $message->likes_count = 0;
-        $message->is_liked = false;
-        $message->parent_user_name = $message->parent?->user?->name ?? null;
-    if ($mediaType !== 'video') {
-        broadcast(new \App\Events\MessageCreated($message))->toOthers();
-    }
-    if ($mediaType === 'video') {
-        \App\Jobs\CompressVideoJob::dispatch($message);
-    }
-    return response()->json(['success' => true, 'data' => $message]);
-}
+        
+    
+    
+    
+
 
     // 處理圖片優化與上傳至 S3
     private function handleImageUpload($file)
@@ -223,12 +242,6 @@ class MessageController extends Controller
     }
 
     public function destroy(Message $message){
-    \Log::info('刪除嘗試:', [
-        'current_user_id' => auth()->id(),
-        'message_owner_id' => $message->user_id,
-        'message_id' => $message->id
-    ]);
-
     if ($message->user_id !== auth()->id()) {
         return response()->json(['success' => false, 'message' => '無權刪除'], 403);
     }
@@ -248,13 +261,6 @@ class MessageController extends Controller
 
     public function update(Request $request, Message $message)
     {
-        \Log::info('Update 請求:', [
-            'message_id' => $message->id,
-            'input_data' => $request->all(),
-            'current_user' => auth()->id(),
-            'message_owner' => $message->user_id
-        ]);
-
         if ($message->user_id !== auth()->id()) {
             return response()->json([
                 'success' => false,

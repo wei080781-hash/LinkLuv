@@ -1,15 +1,23 @@
 <?php 
 // 這個是處理影片任務的 Job，當使用者上傳影片後，會將影片路徑存到資料庫，然後 dispatch 這個 Job 來壓縮影片，壓縮完成後更新資料庫中的影片路徑，並刪除原始影片。
 namespace App\Jobs;
+
+use Exception;
 use App\Models\Message;
+use App\Events\MessageStatusUpdated;
+use App\Events\VideoUploadCompleted;
+use App\Events\VideoUploadFailed;
+use FFMpeg\FFMpeg;
+use FFMpeg\Format\Video\X264;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use FFMpeg\FFMpeg;
-use FFMpeg\Format\Video\X264;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+
 class CompressVideoJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
@@ -26,6 +34,10 @@ class CompressVideoJob implements ShouldQueue
     
 public function handle()
 {
+    //新增
+    $userId = $this->message->user_id;
+    $lockKey = "video-upload-lock:{$userId}";
+
     try {
         // ✅ 修正後的寫法：優先讀取環境變數，若無則自動在 Linux 尋找全域指令
         $ffmpeg = \FFMpeg\FFMpeg::create([
@@ -41,8 +53,13 @@ public function handle()
 
         // 原始檔案的絕對路徑 (Ubuntu 本地端)
         $fullPath = storage_path('app/public/' . $originalPath);
+
         if (!file_exists($fullPath)) {
             \Log::error("影片壓縮失敗：找不到原始檔案 - " . $fullPath);
+
+            $this->message->update(['status' => 'failed']);
+            broadcast(new VideoUploadFailed($userId, '找不到影片原始檔，請重新上傳'));
+
             return;
         }
 
@@ -53,7 +70,7 @@ public function handle()
         $video = $ffmpeg->open($fullPath);
 
         // 🚀 修正 1：改用 X264() 空建構子，手動指名 'aac'，避開 libmp3lame 崩潰
-        $format = new \FFMpeg\Format\Video\X264();
+        $format = new X264();
         $format->setAudioCodec('aac');
         $format->setVideoCodec('libx264');
         $format->setKiloBitrate(1000);
@@ -73,7 +90,7 @@ public function handle()
             
             // 丟上 S3 磁碟
             // ✅ 修正後的新寫法（上傳同時強制蓋上「公開」印章）
-            \Illuminate\Support\Facades\Storage::disk('s3')->put($s3Key, $fileStream);
+            Storage::disk('s3')->put($s3Key, $fileStream);
                 if (is_resource($fileStream)) {
                     fclose($fileStream);
             };
@@ -90,35 +107,39 @@ public function handle()
                 $this->message->refresh();
                 $this->message->loadMissing('user');
 
-            // 廣播通知前端影片已就緒
-            broadcast(new \App\Events\MessageStatusUpdated($this->message));
+            // 使用 MessageStatusUpdated 確保包含 user_id，渲染刪除與編輯按鈕
+            broadcast(new MessageStatusUpdated($this->message));
+
+            // 私人頻道廣播：發送成功 Toast 給上傳者
+            broadcast(new VideoUploadCompleted($userId, $this->message));
 
             // ✅ 加這行，清除快取讓前端拿到新資料
             for ($i = 1; $i <= 10; $i++) {
-                \Illuminate\Support\Facades\Cache::forget("messages_feed_page_{$i}");
+                Cache::forget("messages_feed_page_{$i}");
             }
 
             // 🚀 修正 3：擦乾淨屁股，刪除 Ubuntu 本地硬碟的「原始片」與「壓縮片」
-            \Illuminate\Support\Facades\Storage::disk('public')->delete($originalPath);
+            Storage::disk('public')->delete($originalPath);
             @unlink($localCompressedPath);
         } else {
-            throw new \Exception("本地壓縮檔案生成失敗，無法上傳 S3");
+            throw new Exception("本地壓縮檔案生成失敗，無法上傳 S3");
         }
-    } catch (\Exception $e) {
+    } catch (Exception $e) {
         \Log::error('影片壓縮或上傳 S3 失敗：' . $e->getMessage());
 
         // 2. 更新資料庫狀態為失敗
         $this->message->update(['status' => 'failed']);
         
-        // 3. 🔥 立刻廣播給所有人，讓大家的轉圈圈瞬間變成「⚠️ 影片轉檔失敗，請重新上傳」
-        $this->message->refresh();
-        $this->message->loadMissing('user');
-        broadcast(new \App\Events\MessageStatusUpdated($this->message));
+        // 僅向發文者本人發送私人失敗 Toast 提示
+        broadcast(new VideoUploadFailed($userId, '影片轉檔失敗，請重新上傳'));
 
         throw $e; // 讓 queue 記錄為失敗，方便開 Tinker 查 
-    }
+    } finally {
+            // 歸還 Redis 鎖
+            Cache::forget($lockKey);
 
     }
 }    
 
 
+}
