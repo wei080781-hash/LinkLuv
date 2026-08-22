@@ -26,15 +26,8 @@
             class="absolute top-4 right-5 text-white text-4xl leading-none bg-transparent border-none cursor-pointer">✕</button>
         <div id="lightbox-content"></div>
     </div>
-
     {{-- 上傳 Toast 通知：固定右下角，預設隱藏 --}}
     <div id="toast-stack" class="toast-stack"></div>
-        <div class="upload-toast-body">
-             <span id="upload-toast-text">檔案上傳中...</span>
-        </div>
-        <button type="button" onclick="hideToastNow()" class="upload-toast-close" aria-label="關閉">✕</button>
-    </div>
-
     <style>
     .reply-branch {
         position: relative;
@@ -394,16 +387,7 @@
         if (window.globalMsgMap.has(newMsg.id)) {
             const existing = window.globalMsgMap.get(newMsg.id);
             const children = existing.children || [];
-            // 舊的
-            // Object.assign(existing, newMsg);
-            //     ...existing,
-            //     ...newMsg,
-            //     children,
-            // };
-
-            // merged.id = Number(merged.id);
-            // merged.parent_id = merged.parent_id == null ? null : Number(merged.parent_id);
-
+            
             // 新的
             Object.assign(existing, newMsg);
             existing.children = children;
@@ -937,6 +921,7 @@
     };
 
     // 🔄 submitReply 改用 XHR + Toast
+    // 🔄 submitReply 改用 pushToast，邏輯與 submitPost 對齊
     window.submitReply = function(e, rootId) {
         e.preventDefault();
         const form = e.target;
@@ -945,131 +930,117 @@
         const submitBtn = form.querySelector('button[type="submit"]');
         const file = fileInput && fileInput.files && fileInput.files[0];
         const hasFile = !!file;
-        // 🐛 修正 bug：原本這裡「上面」有一行 console.log('...', hasFile)
-        //    印在 const hasFile 宣告「之前」，會直接噴 ReferenceError（TDZ）。
-        //    已經把 hasFile 的宣告移到最前面，並拿掉那行過早的 console.log。
 
-        // 1. 防呆：沒文字也沒檔案，不處理
         if (!contentInput.value.trim() && !hasFile) {
             alert('請輸入回覆內容或上傳媒體');
             return;
         }
 
-        // 2. 防呆：檔案大小限制 10MB
         if (hasFile && file.size > 10 * 1024 * 1024) {
             alert('檔案太大，最大限制為 10MB');
             fileInput.value = '';
             return;
         }
 
-        // 🆕 新增：影片上傳鎖，若已有一支影片在後端處理中，擋下這次「影片」送出
-        //    （純文字、圖片完全不受影響）
         if (hasFile && isVideoFile(file) && window.pendingVideoUploadId) {
             alert('您有一支影片正在處理中，請稍候完成後再上傳下一支影片');
             return;
         }
+        if (hasFile && isImageFile(file) && window.pendingImageUploadId) {
+            alert('您有一張圖片正在處理中，請稍候完成後再上傳下一張圖片');
+            return;
+        }
 
-
-        // 防重複點擊鎖定
         if (submitBtn) submitBtn.disabled = true;
 
         const msgId = form.querySelector('input[name="parent_id"]')?.value;
 
-        // 🔄 取代：原本這裡展開進度條 DOM，現在改成呼叫 showToast()
         if (hasFile) {
-            showToast('檔案上傳中...', 'info');
+            if (isVideoFile(file)) {
+                pushToast('影片處理中...', 'processing', 2500);
+            } else if (isImageFile(file)) {
+                window.pendingImageUploadId = 'pending';
+                pushToast('圖片上傳中...', 'processing', 2500);
+            }
         }
- 
+
         const xhr = new XMLHttpRequest();
         xhr.open('POST', "{{ route('messages.store') }}", true);
         xhr.setRequestHeader('X-CSRF-TOKEN', document.querySelector('meta[name="csrf-token"]').content);
         xhr.setRequestHeader('Accept', 'application/json');
 
-        // 🔄 取代：原本這裡逐步更新進度條百分比，現在只在傳輸「完成」那一刻換文字成「發布中...」
-        if (hasFile && xhr.upload) {
-            xhr.upload.onprogress = function(event) {
-                if (event.lengthComputable && event.loaded === event.total) {
-                    updateToastMessage('發布中...');
-                }
-            };
-        }
- 
         xhr.onload = function() {
             if (submitBtn) submitBtn.disabled = false;
- 
+            if (isImageFile(file)) window.pendingImageUploadId = null;
+
             let data = {};
             try {
                 data = JSON.parse(xhr.responseText);
             } catch (err) {
                 console.error('JSON 解析失敗:', err);
             }
- 
+
             if (xhr.status === 419) {
                 alert('登入已過期，頁面將自動重新整理');
                 window.location.reload();
                 return;
             }
- 
+
             if (xhr.status === 422) {
                 const firstError = data.errors
                     ? Object.values(data.errors)[0][0]
                     : (data.message || '發生錯誤，請重新確認內容');
                 alert(firstError);
-                if (hasFile) { showToast(firstError, 'error'); hideToastWithDelay(5000); }
+                if (hasFile) pushToast(firstError, 'error', 5000);
                 return;
             }
-            
+
+            if (xhr.status === 409) {
+                const msg = data.message || '請稍候完成後再上傳';
+                alert(msg);
+                pushToast(msg, 'error', 5000);
+                return;
+            }
+
             if (xhr.status >= 200 && xhr.status < 300 && data.success && data.data) {
                 form.reset();
-                // ✅ 補回：contentInput.blur()，你更早之前的「乾淨版」不小心漏掉這行，
-                //    沒有它的話，若輸入框仍是 focus 狀態，handleNewMessage 的「使用者正在打字」
-                //    保護機制會誤判，新回覆送出後畫面不會立刻更新。
                 contentInput.blur();
-                // ✅ 補回：清空媒體預覽，同樣是之前「乾淨版」漏掉的部分
                 if (msgId) {
                     const preview = document.getElementById(`fprev-${msgId}`);
                     if (preview) preview.innerHTML = '';
                 }
- 
+
                 const isProcessingVideo = data.data.media_type === 'video' && data.data.status === 'processing';
- 
+
                 if (isProcessingVideo) {
-                    // 🆕 新增：領號碼牌，Toast 停在「處理中」，等私人頻道通知才會被清掉
                     window.pendingVideoUploadId = data.data.id;
-                    showToast('影片處理中...', 'processing');
                 } else {
                     handleNewMessage(data.data);
                     if (hasFile) {
-                        showToast('發布成功！', 'success');
-                        hideToastWithDelay(5000);
+                        const fallback = data.data.media_type === 'image' ? '圖片' : '影片';
+                        const title = truncateTitle(data.data.content, fallback);
+                        pushToast(`「${title}」發布成功`, 'success', 5000);
                     }
                 }
             } else {
                 if (typeof loadMessages === 'function') loadMessages(true);
                 form.reset();
-                if (hasFile) {
-                    showToast(data.message || '發送失敗，請稍後再試', 'error');
-                    hideToastWithDelay(5000);
-                }
+                if (hasFile) pushToast(data.message || '發送失敗，請稍後再試', 'error', 5000);
             }
         };
 
         xhr.onerror = function() {
             if (submitBtn) submitBtn.disabled = false;
+            if (isImageFile(file)) window.pendingImageUploadId = null;
             if (hasFile) {
-                showToast('網路異常，請稍後再試', 'error');
-                hideToastWithDelay(5000);
+                pushToast('網路異常，請稍後再試', 'error', 5000);
             } else {
                 alert('網路異常，請稍後再試');
             }
         };
-        // 🐛 修正 bug：原本這裡呼叫 cleanupUI()，但 function cleanupUI() {...} 整段被註解掉了，
-        //    一樣會噴 ReferenceError。已經拿掉這個依賴，改成上面 inline 處理解鎖與 Toast。
 
         xhr.send(new FormData(form));
-    }; 
-
-    // 🔄 取代：submitPost 邏輯與 submitReply 對齊，同步改用 Toast
+    };
     window.submitPost = function(e) {
         e.preventDefault();
         const form = e.target;
