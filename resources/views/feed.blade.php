@@ -810,7 +810,7 @@
     }
  
     // type: 'info'/'processing'（轉圈）｜'success'/'error'（emoji）
-    ction pushToast(message, type = 'info', autoHideMs = null) {
+    function pushToast(message, type = 'info', autoHideMs = null) {
      const stack = document.getElementById('toast-stack');
      if (!stack) return null;
 
