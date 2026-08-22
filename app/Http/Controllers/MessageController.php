@@ -80,9 +80,26 @@ class MessageController extends Controller
             \Log::info('偵測到檔案類型: ' . $mime);
 
             if (str_contains($mime, 'image')) {
-                // 圖片：立即處理壓縮並直接上傳 S3
-                $mediaPath = $this->handleImageUpload($file);
-                $mediaType = 'image';
+                // 🆕 圖片鎖：短命鎖，只在這次同步處理期間持有，處理完立刻釋放
+                $userId = auth()->id();
+                $imageLockKey = "image-upload-lock:{$userId}";
+                $imageLock = Cache::lock($imageLockKey, 60);
+
+                if (!$imageLock->get()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => '您有一張圖片正在上傳中，請稍候完成後再上傳下一張。'
+                    ], 409);
+                }
+                
+                try {
+                    $mediaPath = $this->handleImageUpload($file);
+                    $mediaType = 'image';
+                } finally {
+                    // 釋放圖片鎖
+                    $imageLock->release();
+                }
+                
             } elseif (str_contains($mime, 'video')) {
                 // Redis 鎖：限制同一使用者同時只能上傳與轉檔一支影片 
                 $userId = auth()->id();
@@ -255,7 +272,7 @@ class MessageController extends Controller
         }
 
         $messageId = $message->id; // 先記住 ID，刪除後就拿不到了
-        
+
         $message->replies()->delete();
         $message->delete();
 
