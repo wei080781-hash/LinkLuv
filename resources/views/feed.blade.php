@@ -5,7 +5,6 @@
             <div class="flex items-center  w-full h-12">
                 <h2 class="font-semibold text-2xl text-gray-800 leading-tight flex-shrink-0">生活牆</h2>
                 </div>
-            </div>
             
             <!-- 【第二層】發表動態表單 -->
              <div class="w-full">
