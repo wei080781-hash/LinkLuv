@@ -206,7 +206,16 @@
 }
     if (typeof window.pendingImageUploadId === 'undefined') {
     window.pendingImageUploadId = null;
-}    // 🆕 新增：圖片也要限制一次一張
+}    
+
+    if (typeof window.isImageUploading === 'undefined') {
+    window.isImageUploading = false;
+}
+
+
+
+
+    // 🆕 新增：圖片也要限制一次一張
 
     // 暫存：影片訊息 ID → 原始檔名
     window.pendingVideoNames = window.pendingVideoNames || {};
@@ -1010,7 +1019,7 @@
         const form = e.target;
         const contentInput = form.querySelector('input[name="content"]');
         const fileInput = form.querySelector('input[type="file"]');
-        const submitBtn = form.querySelector('button[type="submit"]');
+        
 
 
         const file = fileInput && fileInput.files && fileInput.files[0];
@@ -1033,12 +1042,21 @@
             return;
         }
 
-        if (hasFile && isImageFile(file) && window.pendingImageUploadId) {
-            alert('您有一張圖片正在處理中，請稍候完成後再上傳下一張圖片');
+        if (
+            hasFile &&
+            isImageFile(file) &&
+            window.isImageUploading
+        ) {
+            const message =
+                '您有一張圖片正在上傳中，請稍候完成後再上傳下一張圖片';
+
+            alert(message);
+            pushToast(message, 'error', 5000);
+
             return;
         }
 
-        if (submitBtn) submitBtn.disabled = true;
+        
 
         const msgId = form.querySelector('input[name="parent_id"]')?.value;
 
@@ -1046,7 +1064,7 @@
             if (isVideoFile(file)) {
                 pushToast('影片處理中...', 'processing', 2500);
             } else if (isImageFile(file)) {
-                window.pendingImageUploadId = 'pending';
+                window.isImageUploading = true;
                 pushToast('圖片上傳中...', 'processing', 2500);
             }
         }
@@ -1060,8 +1078,8 @@
         xhr.setRequestHeader('Accept', 'application/json');
 
         xhr.onload = function() {
-            if (submitBtn) {
-                submitBtn.disabled = false;
+            if (hasFile && isImageFile(file)) {
+                window.isImageUploading = false;
             }
 
             if (hasFile && isImageFile(file)) {
@@ -1168,12 +1186,11 @@
         };
 
         xhr.onerror = function() {
-            if (submitBtn) {
-                submitBtn.disabled = false;
-            }
-
+            // if (submitBtn) {
+            //     submitBtn.disabled = false;
+            // }
             if (hasFile && isImageFile(file)) {
-                window.pendingImageUploadId = null;
+                window.isImageUploading = false;
             }
 
             if (hasFile) {
@@ -1183,6 +1200,7 @@
             }
         };
 
+
         xhr.send(new FormData(form));
     };
 
@@ -1191,7 +1209,6 @@
 
         const form = e.target;
         const fileInput = form.querySelector('input[type="file"]');
-        const submitBtn = form.querySelector('button[type="submit"]');
 
         const file = fileInput && fileInput.files && fileInput.files[0];
         const hasFile = !!file;
@@ -1209,21 +1226,28 @@
         }
 
 
-        if (hasFile && isImageFile(file) && window.pendingImageUploadId) {
-            alert('您有一張圖片正在處理中，請稍候完成後再上傳下一張圖片');
-            return;
-        }
+        if (
+            hasFile &&
+            isImageFile(file) &&
+            window.isImageUploading
+        ) {
+            const message =
+                '您有一張圖片正在上傳中，請稍候完成後再上傳下一張圖片';
 
-        if (submitBtn) {
-            submitBtn.disabled = true;
-        }
+            alert(message);
+            pushToast(message, 'error', 5000);
+
+    return;
+}
+
+        
 
         // 🆕 送出當下就推一則「動作提示」，2.5 秒後自動消失，不等實際完成
         if (hasFile) {
            if (isVideoFile(file)) {
               pushToast('影片處理中...', 'processing', 2500);
             } else if (isImageFile(file)) {
-                window.pendingImageUploadId = 'pending'; // 佔位，onload 時清除
+                window.isImageUploading = true; // 佔位，onload 時清除
                 pushToast('圖片上傳中...', 'processing', 2500);
             }
         }
@@ -1240,12 +1264,8 @@
         xhr.setRequestHeader('Accept', 'application/json');
 
         xhr.onload = function() {
-           if (submitBtn) {
-                submitBtn.disabled = false;
-            }
-
-            if (hasFile && isImageFile(file)) {
-                 window.pendingImageUploadId = null;
+           if (hasFile && isImageFile(file)) {
+               window.isImageUploading = false;
             }
 
            let data = {};
@@ -1344,12 +1364,9 @@
             }
 };
     xhr.onerror = function() {
-        if (submitBtn) {
-            submitBtn.disabled = false;
-        }
-
+   
         if (hasFile && isImageFile(file)) {
-            window.pendingImageUploadId = null;
+            window.isImageUploading = false;
         }
 
         if (hasFile) {
@@ -1358,6 +1375,7 @@
             alert('網路異常，請稍後再試');
         }
     };
+        
 
         xhr.send(new FormData(form));
 };
