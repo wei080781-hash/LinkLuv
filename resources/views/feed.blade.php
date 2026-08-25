@@ -5,7 +5,7 @@
             <div class="flex items-center  w-full h-12">
                 <h2 class="font-semibold text-2xl text-gray-800 leading-tight flex-shrink-0">生活牆</h2>
                 </div>
-            
+
             <!-- 【第二層】發表動態表單 -->
              <div class="w-full">
                 @include('components.message-form')
@@ -163,7 +163,7 @@
         border-radius: 50%;
         animation: toast-spin 0.8s linear infinite;
     }
- 
+
     @keyframes toast-spin {
         to { transform: rotate(360deg); }
     }
@@ -201,8 +201,15 @@
 
     // 🎯 影片上傳號碼牌：目前是否有一支影片正在後端處理中
     //    有值時，前端會擋下「下一支影片」的送出（圖片、文字不受影響）
+    if (typeof window.pendingVideoUploadId === 'undefined') {
     window.pendingVideoUploadId = null;
-    window.pendingImageUploadId = null; // 🆕 新增：圖片也要限制一次一張
+}
+    if (typeof window.pendingImageUploadId === 'undefined') {
+    window.pendingImageUploadId = null;
+}    // 🆕 新增：圖片也要限制一次一張
+
+    // 暫存：影片訊息 ID → 原始檔名
+    window.pendingVideoNames = window.pendingVideoNames || {};
 
     let currentPage = 1;
     let isLoading = false;
@@ -257,54 +264,95 @@
                 handleNewMessage(e.message);
             })
 
-        
+
             .listen('.message.deleted', (e) => {
-             handleDeletedMessage(e);
+                handleDeletedMessage(e);
             })
 
             .listen('.message.liked', (e) => {
             handleLikeBroadcast(e);
             });
-    
-        // 🎯 私人頻道：只用來通知「我自己」的上傳狀態，不負責畫面渲染
-        //    ⚠️ 事件名稱 '.upload.completed' / '.upload.failed' 需與後端 Event 對齊，
-        //       後端 broadcastAs() 完成後在這裡確認名稱是否一致。
-        if (window.currentUserId) {
+
+        // 私人頻道：只接收「目前登入帳號」的上傳處理通知
+        if (!window.currentUserId) {
+            return;
+        }
+
            window.Echo.private('user.' + window.currentUserId)
                .listen('.upload.completed', (e) => {
                     console.log('📡 [私人頻道] 上傳完成通知', e);
-                    window.pendingVideoUploadId = null;
-                    const title = truncateTitle(e?.message?.content, '影片');
+
+                    const message = e?.message || {};
+                    const uploadId = message.id;
+
+                    if (uploadId == null) {
+                       console.warn('影片完成事件缺少 message.id', e);
+                       return;
+                    }
+
+                    const uploadKey = String(uploadId);
+
+                    // 本分頁實際上傳的影片，可從暫存取得原始檔名
+                    const rawName = window.pendingVideoNames?.[uploadKey];
+
+                    const title = rawName
+                       ? getUploadToastTitle({ name: rawName }, '影片')
+                       : truncateTitle(message.content, '影片');
+
                     pushToast(`「${title}」發布成功`, 'success', 5000);
+
+                    // 移除該影片名稱暫存
+                    clearPendingVideoName(uploadId);
+
+                    // 只有完成的是本分頁等待中的影片，才解除影片上傳鎖
+                    unlockPendingVideoIfMatched(uploadId);
                 })
-                 .listen('.upload.failed', (e) => {
-                    console.log('📡 [私人頻道] 上傳失敗通知', e);
-                    window.pendingVideoUploadId = null;
-                    pushToast(e?.message || '上傳失敗，請重新上傳', 'error', 5000);
-                });
-        }            
- 
+
+            .listen('.upload.failed', (e) => {
+                console.log('📡 [私人頻道] 上傳失敗通知', e);
+
+                const message = e?.message || {};
+                const uploadId = message.id;
+
+                if (uploadId != null) {
+                    clearPendingVideoName(uploadId);
+                    unlockPendingVideoIfMatched(uploadId);
+                }
+
+                const errorMessage =
+                    typeof e?.message === 'string'
+                        ? e.message
+                        : (
+                            message.error ||
+                            message.message ||
+                            '上傳失敗，請重新上傳'
+                        );
+
+                pushToast(errorMessage, 'error', 5000);
+           });
     }
 
-    
+
+
+
     window.handleLikeBroadcast = function(e) {
     console.log("📡 [雷達成功攔截廣播] 收到別人的點讚訊號！包裹內容：", e);
-    
+
     // 1. 解析目標 ID
     const targetId = Number(e.messageId ?? e.id);
-    
+
     // 2. 升級改用 ?? 運算子，精準攔截數字 0
     const newCount = Number(e.likesCount ?? e.likes_count ?? 0);
-    
+
     console.log(`[探針測試] 經過 ?? 判定後的 newCount 理論數值為: ${newCount}`);
-    
+
     // 3. 同步中央記憶體
     if (window.globalMsgMap.has(targetId)) {
         const msg = window.globalMsgMap.get(targetId);
         msg.likes_count = newCount;
         console.log(`[記憶體同步] 已將地圖中的 ID: ${targetId} 讚數修正為: ${newCount}`);
     }
-    
+
     // 4. 精準抹繪網頁 DOM 數字
     const countEl = document.getElementById(`lcount-${targetId}`);
     if (countEl) {
@@ -312,8 +360,8 @@
             console.log(`[DOM 抹繪] 已成功將網頁上的計數器更新為: ${newCount}`);
         }
     };
-    
-    
+
+
     window.handleDeletedMessage = function(e) {
         const messageId = Number(e?.messageId ?? e?.id ?? e?.message_id);
         const parentId = e?.parentId != null ? Number(e.parentId) : null;
@@ -373,7 +421,7 @@
     //    ⚠️ 新模式下：後端在影片轉檔完成前「完全不會」廣播到 wall-channel，
     //    所以這裡實際上不會再收到 status === 'processing' 的訊息了。
     // =========================================================
-    
+
     window.handleNewMessage = function(newMsg) {
         console.log("★★★★ 我改過 handleNewMessage 了 ★★★★");
         newMsg.id = Number(newMsg.id);
@@ -386,7 +434,7 @@
         if (window.globalMsgMap.has(newMsg.id)) {
             const existing = window.globalMsgMap.get(newMsg.id);
             const children = existing.children || [];
-            
+
             // 新的
             Object.assign(existing, newMsg);
             existing.children = children;
@@ -450,22 +498,22 @@
             // 回覆：找到根貼文並局部重繪
             const rootId = findRootId(newMsg.parent_id);
             const trueParent = window.globalMsgMap.get(newMsg.parent_id);
-            
+
 
             if (trueParent) {
                 if (!trueParent.children) trueParent.children = [];
                 // 檢查是否重複，不重複才塞入
-                if (!trueParent.children.some(c => c.id === newMsg.id)) {   
+                if (!trueParent.children.some(c => c.id === newMsg.id)) {
                     trueParent.children.push(newMsg);
                 }
             }
-            
+
             // 強制展開該根貼文的檢視狀態
             window.expandedSet.add(rootId);
 
             const rootEl = document.getElementById(`msg-${rootId}`);
             const rootMsg = window.globalMsgMap.get(rootId);
-            
+
 
             if (rootEl && rootMsg) {
                 // 防護：若使用者正在該卡片內打字，跳過重繪避免焦點丟失
@@ -480,7 +528,7 @@
             }
         }
     };
-    
+
 
     // =========================================================
     // 5. 輔助函式：回溯找出根貼文 ID
@@ -785,13 +833,13 @@
     function isImageFile(file) {
          return !!(file && file.type && file.type.startsWith('image/'));
     }
-     
+
     function truncateTitle(content, fallback) {
         const text = (content || '').trim();
         if (!text) return fallback;
         return text.length > 20 ? text.slice(0, 20) + '...' : text;
     }
- 
+
     // type: 'info'/'processing'（轉圈）｜'success'/'error'（emoji）
     function pushToast(message, type = 'info', autoHideMs = null) {
      const stack = document.getElementById('toast-stack');
@@ -919,18 +967,57 @@
         }
     };
 
+    // 取得通知列標題：原始檔名最多顯示前 20 個字元
+    function getUploadToastTitle(file, fallback = '檔案') {
+        const rawName = (file?.name || '').trim();
+
+        if (!rawName) {
+            return fallback;
+        }
+
+        // 可正確處理中文、emoji 等 Unicode 字元
+        const chars = Array.from(rawName);
+
+        return chars.length > 20
+            ? `${chars.slice(0, 20).join('')}…`
+            : rawName;
+    }
+
+    // 只有完成／失敗的是本分頁正在等待的影片時，才解除鎖
+    function unlockPendingVideoIfMatched(uploadId) {
+        if (
+            uploadId != null &&
+            window.pendingVideoUploadId != null &&
+            String(window.pendingVideoUploadId) === String(uploadId)
+        ) {
+            window.pendingVideoUploadId = null;
+        }
+    }
+
+    // 清除某支影片的檔名暫存
+    function clearPendingVideoName(uploadId) {
+        if (uploadId != null && window.pendingVideoNames) {
+            delete window.pendingVideoNames[String(uploadId)];
+        }
+    }
+
     // 🔄 submitReply 改用 XHR + Toast
     // 🔄 submitReply 改用 pushToast，邏輯與 submitPost 對齊
     window.submitReply = function(e, rootId) {
         e.preventDefault();
+
+
         const form = e.target;
         const contentInput = form.querySelector('input[name="content"]');
         const fileInput = form.querySelector('input[type="file"]');
         const submitBtn = form.querySelector('button[type="submit"]');
+
+
         const file = fileInput && fileInput.files && fileInput.files[0];
         const hasFile = !!file;
+        const content = contentInput?.value?.trim() || '';
 
-        if (!contentInput.value.trim() && !hasFile) {
+        if (!content && !hasFile) {
             alert('請輸入回覆內容或上傳媒體');
             return;
         }
@@ -945,6 +1032,7 @@
             alert('您有一支影片正在處理中，請稍候完成後再上傳下一支影片');
             return;
         }
+
         if (hasFile && isImageFile(file) && window.pendingImageUploadId) {
             alert('您有一張圖片正在處理中，請稍候完成後再上傳下一張圖片');
             return;
@@ -964,15 +1052,24 @@
         }
 
         const xhr = new XMLHttpRequest();
+
         xhr.open('POST', "{{ route('messages.store') }}", true);
+
         xhr.setRequestHeader('X-CSRF-TOKEN', document.querySelector('meta[name="csrf-token"]').content);
+
         xhr.setRequestHeader('Accept', 'application/json');
 
         xhr.onload = function() {
-            if (submitBtn) submitBtn.disabled = false;
-            if (isImageFile(file)) window.pendingImageUploadId = null;
+            if (submitBtn) {
+                submitBtn.disabled = false;
+            }
+
+            if (hasFile && isImageFile(file)) {
+                window.pendingImageUploadId = null;
+            }
 
             let data = {};
+
             try {
                 data = JSON.parse(xhr.responseText);
             } catch (err) {
@@ -989,48 +1086,96 @@
                 const firstError = data.errors
                     ? Object.values(data.errors)[0][0]
                     : (data.message || '發生錯誤，請重新確認內容');
+
                 alert(firstError);
-                if (hasFile) pushToast(firstError, 'error', 5000);
+
+                if (hasFile){
+                    pushToast(firstError, 'error', 5000);
+                }
+
                 return;
             }
 
             if (xhr.status === 409) {
                 const msg = data.message || '請稍候完成後再上傳';
+
                 alert(msg);
                 pushToast(msg, 'error', 5000);
+
                 return;
             }
 
             if (xhr.status >= 200 && xhr.status < 300 && data.success && data.data) {
                 form.reset();
                 contentInput.blur();
+
                 if (msgId) {
                     const preview = document.getElementById(`fprev-${msgId}`);
-                    if (preview) preview.innerHTML = '';
-                }
 
-                const isProcessingVideo = data.data.media_type === 'video' && data.data.status === 'processing';
-
-                if (isProcessingVideo) {
-                    window.pendingVideoUploadId = data.data.id;
-                } else {
-                    handleNewMessage(data.data);
-                    if (hasFile) {
-                        const fallback = data.data.media_type === 'image' ? '圖片' : '影片';
-                        const title = truncateTitle(data.data.content, fallback);
-                        pushToast(`「${title}」發布成功`, 'success', 5000);
+                    if (preview) {
+                        preview.innerHTML = '';
                     }
                 }
+
+                const isProcessingVideo =
+                    data.data.media_type === 'video' &&
+                    data.data.status === 'processing';
+
+                // 影片已收到，但仍在轉檔／處理
+                if (isProcessingVideo) {
+                   const uploadId = data.data.id;
+
+                    window.pendingVideoUploadId = uploadId;
+                    window.pendingVideoNames[String(uploadId)] = file.name;
+
+                    const title = getUploadToastTitle(file, '影片');
+
+                    pushToast(
+                        `「${title}」上傳成功，影片處理中`,
+                        'success',
+                        5000
+                    );
+
+                    return;
+                }
+
+                handleNewMessage(data.data);
+
+                // 圖片或已完成的媒體
+                if (hasFile) {
+                    const fallback =
+                        data.data.media_type === 'image' ? '圖片' : '影片';
+
+                    const title = getUploadToastTitle(file, fallback);
+
+                    pushToast(`「${title}」發布成功`, 'success', 5000);
+                }
             } else {
-                if (typeof loadMessages === 'function') loadMessages(true);
+                if (typeof loadMessages === 'function') {
+                    loadMessages(true);
+                }
+
                 form.reset();
-                if (hasFile) pushToast(data.message || '發送失敗，請稍後再試', 'error', 5000);
+
+                if (hasFile) {
+                    pushToast(
+                        data.message || '發送失敗，請稍後再試',
+                         'error',
+                         5000
+                    );
+                }
             }
         };
 
         xhr.onerror = function() {
-            if (submitBtn) submitBtn.disabled = false;
-            if (isImageFile(file)) window.pendingImageUploadId = null;
+            if (submitBtn) {
+                submitBtn.disabled = false;
+            }
+
+            if (hasFile && isImageFile(file)) {
+                window.pendingImageUploadId = null;
+            }
+
             if (hasFile) {
                 pushToast('網路異常，請稍後再試', 'error', 5000);
             } else {
@@ -1040,17 +1185,20 @@
 
         xhr.send(new FormData(form));
     };
+
     window.submitPost = function(e) {
         e.preventDefault();
+
         const form = e.target;
-        const fi = form.querySelector('input[type="file"]');
+        const fileInput = form.querySelector('input[type="file"]');
         const submitBtn = form.querySelector('button[type="submit"]');
-        const file = fi && fi.files && fi.files[0];
+
+        const file = fileInput && fileInput.files && fileInput.files[0];
         const hasFile = !!file;
 
         if (hasFile && file.size > 10 * 1024 * 1024) {
             alert('檔案太大，最大限制為 10MB');
-            fi.value = '';
+            fileInput.value = '';
             return;
         }
 
@@ -1059,12 +1207,16 @@
             alert('您有一支影片正在處理中，請稍候完成後再上傳下一支影片');
             return;
         }
+
+
         if (hasFile && isImageFile(file) && window.pendingImageUploadId) {
             alert('您有一張圖片正在處理中，請稍候完成後再上傳下一張圖片');
             return;
         }
 
-        if (submitBtn) submitBtn.disabled = true;
+        if (submitBtn) {
+            submitBtn.disabled = true;
+        }
 
         // 🆕 送出當下就推一則「動作提示」，2.5 秒後自動消失，不等實際完成
         if (hasFile) {
@@ -1077,16 +1229,32 @@
         }
 
         const xhr = new XMLHttpRequest();
+
         xhr.open('POST', "{{ route('messages.store') }}", true);
-        xhr.setRequestHeader('X-CSRF-TOKEN', document.querySelector('meta[name="csrf-token"]').content);
+
+        xhr.setRequestHeader(
+            'X-CSRF-TOKEN',
+             document.querySelector('meta[name="csrf-token"]').content
+        );
+
         xhr.setRequestHeader('Accept', 'application/json');
 
         xhr.onload = function() {
-           if (submitBtn) submitBtn.disabled = false;
-           if (isImageFile(file)) window.pendingImageUploadId = null; // 圖片同步完成，立刻解鎖
+           if (submitBtn) {
+                submitBtn.disabled = false;
+            }
+
+            if (hasFile && isImageFile(file)) {
+                 window.pendingImageUploadId = null;
+            }
 
            let data = {};
-           try { data = JSON.parse(xhr.responseText); } catch (err) { console.error('JSON 解析失敗:', err); }
+
+           try {
+                data = JSON.parse(xhr.responseText);
+            } catch (err) {
+                console.error('JSON 解析失敗:', err);
+            }
 
            if (xhr.status === 419) {
                 alert('登入已過期，頁面將自動重新整理');
@@ -1094,42 +1262,106 @@
                 return;
             }
 
+             if (xhr.status === 422) {
+                const firstError = data.errors
+                   ? Object.values(data.errors)[0][0]
+                   : (data.message || '發生錯誤，請重新確認內容');
+
+                alert(firstError);
+
+                if (hasFile) {
+                    pushToast(firstError, 'error', 5000);
+                }
+
+                return;
+            }
+
             if (xhr.status === 409) {
                 const msg = data.message || '請稍候完成後再上傳';
+
                 alert(msg);
                 pushToast(msg, 'error', 5000);
+
                 return;
             }
 
             if (xhr.status >= 200 && xhr.status < 300 && data.success && data.data) {
-                form.reset();
-                const preview = document.getElementById('fprev-main');
-                if (preview) preview.innerHTML = '';
-
-                const isProcessingVideo = data.data.media_type === 'video' && data.data.status === 'processing';
-
-                if (isProcessingVideo) {
-                   window.pendingVideoUploadId = data.data.id;
-                   // 不用管 toast，動作提示已經在跑自己的 2.5 秒計時器
-                } else {
-                    handleNewMessage(data.data);
-                    // 🆕 圖片（或純文字帶檔案的情況）：立刻推完成通知
-                    if (hasFile) {
-                        const fallback = data.data.media_type === 'image' ? '圖片' : '影片';
-                        const title = truncateTitle(data.data.content, fallback);
-                        pushToast(`「${title}」發布成功`, 'success', 5000);
-                    }
-                }
-            } else {
-               if (typeof loadMessages === 'function') loadMessages(true);
                form.reset();
-               if (hasFile) pushToast(data.message || '發送失敗，請稍後再試', 'error', 5000);
+
+                const preview = document.getElementById('fprev-main');
+
+
+                if (preview) {
+                    preview.innerHTML = '';
+                }
+
+                const isProcessingVideo =
+                    data.data.media_type === 'video' &&
+                    data.data.status === 'processing';
+
+                // 影片已收到，但仍在轉檔／處理
+                if (isProcessingVideo) {
+                    const uploadId = data.data.id;
+
+                    window.pendingVideoUploadId = uploadId;
+                    window.pendingVideoNames[String(uploadId)] = file.name;
+
+                    const title = getUploadToastTitle(file, '影片');
+
+                    pushToast(
+                       `「${title}」上傳成功，影片處理中`,
+                       'success',
+                        5000
+                    );
+
+                    return;
+                }
+
+                // 圖片或已完成的媒體
+                handleNewMessage(data.data);
+
+                if (hasFile) {
+                    const fallback =
+                        data.data.media_type === 'image' ? '圖片' : '影片';
+
+                    const title = getUploadToastTitle(file, fallback);
+
+                    pushToast(`「${title}」發布成功`, 'success', 5000);
+                }
+        } else {
+            if (typeof loadMessages === 'function') {
+                loadMessages(true);
             }
-        };
+
+            form.reset();
+
+            if (hasFile) {
+                pushToast(
+                    data.message || '發送失敗，請稍後再試',
+                    'error',
+                    5000);
+                }
+            }
+};
+    xhr.onerror = function() {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+        }
+
+        if (hasFile && isImageFile(file)) {
+            window.pendingImageUploadId = null;
+        }
+
+        if (hasFile) {
+            pushToast('網路異常，請稍後再試', 'error', 5000);
+        } else {
+            alert('網路異常，請稍後再試');
+        }
+    };
 
         xhr.send(new FormData(form));
-    };   
-        
+};
+
     //新的修改
     window.deleteMsg = function(id) {
     if (!confirm('確定要刪除這則訊息嗎？')) return;
@@ -1240,7 +1472,7 @@ window.cancelEdit = function(id, orig) {
                     const msg = window.globalMsgMap.get(id);
                     msg.likes_count = d.likes_count;
                     msg.is_liked = d.liked;
-                
+
                 } else {
                     console.warn(`[探針 5-2][📢 警告] globalMsgMap 裡面竟然找不到 ID: ${id} 的留言！`);
                 }
@@ -1326,4 +1558,4 @@ window.cancelEdit = function(id, orig) {
         setTimeout(() => target.classList.remove('msg-highlight'), 1500);
     };
     </script>
-</x-app-layout> 
+</x-app-layout>
