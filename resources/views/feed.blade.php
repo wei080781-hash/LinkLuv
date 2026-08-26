@@ -302,7 +302,9 @@
                     const uploadKey = String(uploadId);
 
                     // 本分頁實際上傳的影片，可從暫存取得原始檔名
-                    const rawName = window.pendingVideoNames?.[uploadKey];
+                    const rawName =
+                        message.original_filename ||
+                        window.pendingVideoNames?.[uploadKey];
 
                     const title = rawName
                        ? getUploadToastTitle({ name: rawName }, '影片')

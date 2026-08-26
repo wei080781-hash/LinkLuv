@@ -38,8 +38,16 @@ class MessageController extends Controller
         
         $items = collect($messages->items())->map(function ($msg) use ($likedIds) {
             $msg->is_liked = isset($likedIds[$msg->id]);
-            // ★ 附加 parent_user_name，供前端 @mention 使用
+            // 提供前端 @mention 使用
             $msg->parent_user_name = $msg->parent?->user?->name ?? null;
+
+            // 從 Redis 取得影片原始檔名
+            if ($msg->media_type === 'video') {
+                $msg->original_filename = Cache::get(
+                    "message_original_filename:{$msg->id}"
+                );
+            }
+
             return $msg;
         });
         return response()->json([
@@ -142,6 +150,16 @@ class MessageController extends Controller
             // 🔥 【核心亮點】動態判斷狀態：如果是影片就設為處理中(processing)，其他（純文字/圖片）就是 ready
             'status'     => ($mediaType === 'video') ? 'processing' : 'ready',
         ]);
+
+
+        // 影片原始檔名只暫存在 Redis，不寫入 messages 資料表
+        if ($mediaType === 'video' && $request->hasFile('media')) {
+            Cache::put(
+               "message_original_filename:{$message->id}",
+               $request->file('media')->getClientOriginalName(),
+               now()->addDays(7)
+            );
+        }                
 
         // // 2. 加上這一行：把訊息丟進大聲公廣播出去！
         // // .toOthers() 很重要，它能確保「發文者自己」不會重複收到這則推播

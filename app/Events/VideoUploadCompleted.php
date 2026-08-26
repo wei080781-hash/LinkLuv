@@ -7,6 +7,7 @@ use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Cache;
 
 class VideoUploadCompleted implements ShouldBroadcastNow
 {
@@ -26,8 +27,18 @@ class VideoUploadCompleted implements ShouldBroadcastNow
 
     public function broadcastWith(): array
     {
+        $originalFilename = Cache::get(
+            'message_original_filename:' . $this->message->id
+        );
+
         return [
-            'message' => $this->message,
+            'message' => [
+                'id' => $this->message->id,
+                'content' => $this->message->content,
+                'media_type' => $this->message->media_type,
+                'status' => $this->message->status,
+                'original_filename' => $originalFilename,
+            ],
         ];
     }
 }
