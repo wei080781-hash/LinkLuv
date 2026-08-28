@@ -317,6 +317,8 @@
 
                     // 只有完成的是本分頁等待中的影片，才解除影片上傳鎖
                     unlockPendingVideoIfMatched(uploadId);
+                    // 重新讀取 Feed，讓影片依 feed_order_at 排序
+                    loadMessages(true);
                 })
 
             .listen('.upload.failed', (e) => {

@@ -101,11 +101,16 @@ public function handle()
             $this->message->update([
                 'video_path' => $s3Key,
                 'status'     => 'ready',
+                'feed_order_at' => now(),
             ]);
-
+            
+            // ✅ 加這行，清除快取讓前端拿到新資料
+            for ($i = 1; $i <= 10; $i++) {
+                Cache::forget("messages_feed_page_{$i}");
+            }
 
             // ✅ 修正 3：在廣播前，重新從資料庫刷新這則訊息，確保它帶有最新的 media_type 與 user 關聯！
-                // 這樣前一個步驟改的 MessageStatusUpdated 廣播包裹就不會漏資料了。
+            // 這樣前一個步驟改的 MessageStatusUpdated 廣播包裹就不會漏資料了。
                 $this->message->refresh();
                 $this->message->loadMissing('user');
 
@@ -115,10 +120,7 @@ public function handle()
             // 私人頻道廣播：發送成功 Toast 給上傳者
             broadcast(new VideoUploadCompleted($userId, $this->message));
 
-            // ✅ 加這行，清除快取讓前端拿到新資料
-            for ($i = 1; $i <= 10; $i++) {
-                Cache::forget("messages_feed_page_{$i}");
-            }
+            
 
             // 🚀 修正 3：擦乾淨屁股，刪除 Ubuntu 本地硬碟的「原始片」與「壓縮片」
             Storage::disk('public')->delete($originalPath);

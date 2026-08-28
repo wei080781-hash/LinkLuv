@@ -25,6 +25,7 @@ class MessageController extends Controller
                 //  新增
                 ->where('status', 'ready')
                  // ★ 關鍵排序改動：
+                 ->orderByDesc('feed_order_at')
                  ->orderBy('thread_id', 'DESC') // 1. 讓最新發布的討論串（主留言）永遠排在最上面
                  ->orderBy('path', 'ASC')       // 2. 在同一個討論串內部，依照物化路徑正序排，確保父在子前
                  ->paginate($perPage, ['*'], 'page', $page);
@@ -149,6 +150,7 @@ class MessageController extends Controller
             'depth'      => $depth,
             // 🔥 【核心亮點】動態判斷狀態：如果是影片就設為處理中(processing)，其他（純文字/圖片）就是 ready
             'status'     => ($mediaType === 'video') ? 'processing' : 'ready',
+            'feed_order_at' => now(),
         ]);
 
 
