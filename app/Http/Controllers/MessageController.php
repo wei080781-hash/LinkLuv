@@ -167,21 +167,36 @@ class MessageController extends Controller
         // // .toOthers() 很重要，它能確保「發文者自己」不會重複收到這則推播
         // broadcast(new MessageStatusUpdated($message))->toOthers();
 
-        // 改動讓影片後端完成才會顯示
-        if ($mediaType !== 'video') {
-            broadcast(new MessageStatusUpdated($message))->toOthers();
-        }
 
         // 更新物化路徑 (Materialized Path)
         $paddedId = str_pad($message->id, 10, '0', STR_PAD_LEFT);
-        $path = $parentId ? (Message::findOrFail($parentId)->path . '.' . $paddedId) : $paddedId;
-        $threadId = $parentId ? Message::findOrFail($parentId)->thread_id : $message->id;
+
+        $path = $parentId 
+            ? (Message::findOrFail($parentId)->path . '.' . $paddedId) 
+            : $paddedId;
+
+
+        $threadId = $parentId 
+            ? (Message::findOrFail($parentId)->thread_id ?? $parentId)
+            : $message->id;
         
         $message->update([
             'path' => $path,
-            'thread_id' => $threadId
+            'thread_id' => $threadId,
         ]);
 
+        // 如果是回覆，更新根貼文的 Feed 排序時間
+        if ($parentId) {
+           Message::where('id', $threadId)->update([
+               'feed_order_at' => now(),
+            ]);
+        }
+
+        // 清除快取並回傳
+        for ($i = 1; $i <= 10; $i++) {
+            \Illuminate\Support\Facades\Cache::forget("messages_feed_page_{$i}");
+        }
+        
         // 維護 Closure Table 關係
         if ($parentId) {
             $this->storeClosure($message->id, $parentId);
@@ -189,10 +204,7 @@ class MessageController extends Controller
             DB::table('message_closure')->insert(['ancestor' => $message->id, 'descendant' => $message->id]);
         }
 
-        // 清除快取並回傳
-        for ($i = 1; $i <= 10; $i++) {
-            \Illuminate\Support\Facades\Cache::forget("messages_feed_page_{$i}");
-        }
+        
         
         $message->load(['user', 'parent.user']);
         $message->likes_count = 0;

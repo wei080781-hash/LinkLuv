@@ -1163,6 +1163,11 @@
 
                 handleNewMessage(data.data);
 
+                // 回覆成功後重新取得排序後的 Feed
+                if (data.data.parent_id) {
+                    loadMessages(true);
+                }
+
                 // 圖片或已完成的媒體
                 if (hasFile) {
                     const fallback =
