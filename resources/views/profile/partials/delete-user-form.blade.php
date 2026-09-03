@@ -30,14 +30,14 @@
             </p>
 
             <div class="mt-6">
-                <x-input-label for="password" value="{{ __('Password') }}" class="sr-only" />
+                <x-input-label for="password" value="請輸入 DELETE 以確認" class="sr-only" />
 
                 <x-text-input
                     id="password"
                     name="password"
                     type="password"
                     class="mt-1 block w-3/4"
-                    placeholder="{{ __('Password') }}"
+                    placeholder="請輸入 DELETE 以確認"
                 />
 
                 <x-input-error :messages="$errors->userDeletion->get('password')" class="mt-2" />
