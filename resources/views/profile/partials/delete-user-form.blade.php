@@ -1,6 +1,5 @@
 @php $user = auth()->user(); @endphp
 
-@if (!$user->google_id)
 <section class="space-y-6">
     <header>
         <h2 class="text-lg font-medium text-gray-900">
@@ -56,4 +55,3 @@
         </form>
     </x-modal>
 </section>
-@endif

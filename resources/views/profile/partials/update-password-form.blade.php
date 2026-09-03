@@ -1,5 +1,4 @@
-<!-- 增加判斷id -->
- @if (!auth()->user()->google_id)
+
 <section>
     <header>
         <h2 class="text-lg font-medium text-gray-900">
@@ -48,4 +47,4 @@
         </div>
     </form>
 </section>
-@endif
+
