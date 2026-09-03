@@ -44,13 +44,13 @@ class NewPasswordController extends Controller
             $request->only('email', 'password', 'password_confirmation', 'token'),
             function (User $user) use ($request) {
                 $user->forceFill([
-                    'password' => Hash::make($request->password),
+                    'password' => $request->password, // 不加引號，傳入明文變數
                     'remember_token' => Str::random(60),
                 ])->save();
 
                 event(new PasswordReset($user));
-            }
-        );
+        }
+    );
 
         // If the password was successfully reset, we will redirect the user back to
         // the application's home authenticated view. If there is an error we can
