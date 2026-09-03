@@ -41,8 +41,7 @@ class GoogleController extends Controller
             [
                 'name' => $googleUser->getName(),
                 'google_id' => $googleUser->getId(), // 建議加上
-                'password' => Hash::make(uniqid()),
-                // 新加上這個條件讓google用戶標記為以驗證
+                'password' => null, // 👈 改為 null，代表尚未設定本地密碼
                 'email_verified_at' => now(),
             ]);
         }

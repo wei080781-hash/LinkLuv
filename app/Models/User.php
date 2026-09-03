@@ -66,4 +66,12 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
+
+    /**
+     * 檢查使用者是否已設定本地密碼
+     */
+    public function hasPassword(): bool
+    {
+        return ! is_null($this->password);
+    }
 }

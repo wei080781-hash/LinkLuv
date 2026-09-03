@@ -18,14 +18,17 @@ class PasswordController extends Controller
 
         $user = $request->user();
 
-        // if ($user->google_id) {
-        // abort(403, 'Google 登入帳號無法使用此方式修改密碼。');
-        // }
-
-        $validated = $request->validateWithBag('updatePassword', [
-            'current_password' => ['required', 'current_password'],
+        // 1. 基本驗證規則（新密碼與確認密碼）
+        $rules = [
             'password' => ['required', Password::defaults(), 'confirmed'],
-        ]);
+        ];
+
+        // 2. 動態判斷：只有當使用者原本「有密碼」時，才要求輸入舊密碼
+        if ($user->hasPassword()) {
+            $rules['current_password'] = ['required', 'current_password'];
+        }
+
+        $validated = $request->validateWithBag('updatePassword', $rules);
 
         $request->user()->update([
             'password' => Hash::make($validated['password']),
