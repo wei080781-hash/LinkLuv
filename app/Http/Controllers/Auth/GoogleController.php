@@ -44,8 +44,8 @@ class GoogleController extends Controller
                 'password' => Hash::make(uniqid()),
                 // 新加上這個條件讓google用戶標記為以驗證
                 'email_verified_at' => now(),
-            ]
-        );
+            ]);
+        }
 
         
 
