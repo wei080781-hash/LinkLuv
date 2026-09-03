@@ -24,6 +24,18 @@ class GoogleController extends Controller
             return redirect('/login')->withErrors(['google' => '發生錯誤：' . $e->getMessage()]);
         }
 
+        // 1. 先透過 Email 尋找是否已有使用者紀錄
+        $user = User::where('email', $googleUser->getEmail())->first();
+
+        if ($user) {
+            // 情況 A：帳號已存在（不論是一般帳號還是舊 Google 帳號
+            // 只補上 google_id，保護原本的 password 不被覆蓋
+            $user->update([
+               'google_id' => $googleUser->getId(),
+               'email_verified_at' => $user->email_verified_at ?? now(),  
+            ]);
+        } else {
+            // 情況 B：全新使用者，建立新帳號並給予初始隨機密碼
         $user = User::updateOrCreate(
             ['email' => $googleUser->getEmail()],
             [
@@ -35,10 +47,7 @@ class GoogleController extends Controller
             ]
         );
 
-        // 判斷帳號已存在資料庫並補上google id 去做新登入
-        if (!$user->google_id) {
-            $user->update(['google_id' => $googleUser->getId()]);
-        }
+        
 
         Auth::login($user);
 
