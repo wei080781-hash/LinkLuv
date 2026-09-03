@@ -76,10 +76,10 @@ class ProfileController extends Controller
     {
         $user = $request->user();
 
-        // Google 登入的使用者不允許透過此方式刪除帳號
-        if ($user->google_id) {
-        abort(403, 'Google 登入帳號無法使用此方式刪除，請聯繫客服協助。');
-        }
+        // // Google 登入的使用者不允許透過此方式刪除帳號
+        // if ($user->google_id) {
+        // abort(403, 'Google 登入帳號無法使用此方式刪除，請聯繫客服協助。');
+        // }
 
         $request->validateWithBag('userDeletion', [
             'password' => ['required', 'current_password'],
