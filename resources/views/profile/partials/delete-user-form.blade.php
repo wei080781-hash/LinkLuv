@@ -35,7 +35,7 @@
                 <x-text-input
                     id="password"
                     name="password"
-                    type="password"
+                    type="text"
                     class="mt-1 block w-3/4"
                     placeholder="請輸入 DELETE 以確認"
                 />

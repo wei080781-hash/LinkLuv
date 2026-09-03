@@ -73,17 +73,16 @@ class ProfileController extends Controller
      * Delete the user's account.
      */
     public function destroy(Request $request): RedirectResponse
-    {
-        $user = $request->user();
-
-        // // Google 登入的使用者不允許透過此方式刪除帳號
-        // if ($user->google_id) {
-        // abort(403, 'Google 登入帳號無法使用此方式刪除，請聯繫客服協助。');
-        // }
-
+    {   
+        // 驗證輸入內容必須完全等於 DELETE
         $request->validateWithBag('userDeletion', [
-            'password' => ['required', 'current_password'],
+            'delete_confirm' => ['required', 'in:DELETE'],
+        ], [
+            'delete_confirm.in' => '請精準輸入 DELETE 以確認刪除。',
+            'delete_confirm.required' => '請輸入 DELETE 以確認刪除。',
         ]);
+
+        $user = $request->user();
 
         Auth::logout();
 
