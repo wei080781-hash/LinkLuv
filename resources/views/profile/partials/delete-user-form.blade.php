@@ -40,7 +40,7 @@
                     placeholder="請輸入 DELETE 以確認"
                 />
 
-                <x-input-error :messages="$errors->userDeletion->get('password')" class="mt-2" />
+                <x-input-error :messages="$errors->userDeletion->get('delete_confirm')" class="mt-2" />
             </div>
 
             <div class="mt-6 flex justify-end">
