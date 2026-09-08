@@ -17,6 +17,14 @@
     </nav>
 
     <main>
+        @if (session('status'))
+            <div class="max-w-7xl mx-auto px-6 mt-4">
+                <div class="p-4 text-sm text-green-700 bg-green-100 rounded-lg dark:bg-green-200 dark:text-green-800" role="alert">
+                    {{ session('status') }}
+                </div>
+            </div>
+        @endif
+
         <header class="container mx-auto flex flex-col md:flex-row items-center py-20 px-6">
             <div class="md:w-1/2 mb-10 md:mb-0">
                 <h1 class="text-5xl font-extrabold mb-6">分享生活，<br><span class="text-pink-600">遇見懂妳的同好</span></h1>
