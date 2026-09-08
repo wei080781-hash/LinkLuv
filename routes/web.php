@@ -23,7 +23,7 @@ Route::middleware('auth')->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
     Route::delete('/profile/photo', [ProfileController::class, 'deletePhoto'])->name('profile.photo.delete');
     // 🎯 修正這裡：路徑加上 /api/ 才能跟前端的 fetch 完美對上！
-    Route::get('/api/messages', [MessageController::class, 'index'])->name('messages.index');
+    Route::get('/api/messages', [MessageController::class, 'index'])->name('api.messages.index');
 
     // ✅ 加入 GET /messages
     Route::get('/messages', [MessageController::class, 'index'])->name('messages.index');
