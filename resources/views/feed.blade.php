@@ -266,10 +266,11 @@
         // 公開頻道：畫面渲染用（貼文/回覆/刪除/按讚）
         window.Echo.channel('wall-channel')
             .listen('.user.profile.updated', (e) => {
+                console.log('收到大頭貼更新廣播！', e);
                 // 搜尋畫面上所有該使用者的 <img data-user-id="X"> 或選取器並替換 src
                 const userAvatars = document.querySelectorAll(`.user-avatar-${e.user.id}`);
                 userAvatars.forEach(img => {
-                    img.src = e.user.profile_photo_url;
+                    img.src = e.user.profile_photo_url + '?t=' + new Date().getTime();
                 });
             })
 
