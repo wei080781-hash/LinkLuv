@@ -733,7 +733,7 @@
         return `
         <div id="msg-${msg.id}" class="reply-branch relative pt-2.5" data-id="${msg.id}" data-parent-id="${msg.parent_id || ''}">
             <div class="flex items-start gap-2">
-                : `<img src="${msg.user.profile_photo_url}" class="w-10 h-10 rounded-full object-cover flex-shrink-0 user-avatar-${msg.user_id}">`;
+                <img src="${msg.user.profile_photo_url}" class="w-7 h-7 rounded-full object-cover flex-shrink-0 mt-0.5 relative z-10 user-avatar-${msg.user_id}">
                 <div class="flex-1 min-w-0">
                     <div class="msg-bubble bg-gray-50 hover:bg-gray-100 border border-gray-100 rounded-2xl px-3 py-2">
                         <div class="flex items-baseline gap-1 flex-wrap mb-0.5">
