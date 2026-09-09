@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Redirect;
 use Illuminate\View\View;
 use App\Services\ProfilePhotoService;
 use Illuminate\Support\Facades\Log;
+use App\Events\UserProfileUpdated;
 
 class ProfileController extends Controller
 {
