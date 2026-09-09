@@ -647,7 +647,7 @@
 
         const avatarCol = hasReplies
             ? `<div class="flex flex-col items-center flex-shrink-0 w-10">
-                <img src="${msg.user.profile_photo_url}" class="w-10 h-10 rounded-full object-cover flex-shrink-0">
+                <img src="${msg.user.profile_photo_url}" class="w-10 h-10 rounded-full object-cover flex-shrink-0 user-avatar-${msg.user_id}">
                 <div class="w-0.5 flex-1 bg-gray-300 mt-1 rounded-full min-h-3"></div>
                </div>`
             : `<img src="${msg.user.profile_photo_url}" class="w-10 h-10 rounded-full object-cover flex-shrink-0 user-avatar-${msg.user_id}">`;
