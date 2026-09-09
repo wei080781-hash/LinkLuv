@@ -70,8 +70,12 @@ class ProfileController extends Controller
             \Illuminate\Support\Facades\Cache::forget("messages_feed_page_{$i}");
         }
 
+        // 【2. 發送即時廣播通知其他人】
+        event(new UserProfileUpdated($user));
+
         // 記錄：更新流程結束
         Log::info("Profile Update Completed: User ID {$user->id} saved successfully.");
+
         return Redirect::route('profile.edit')->with('status', 'profile-updated');
     }
 
@@ -110,6 +114,8 @@ class ProfileController extends Controller
         for ($i = 1; $i <= 10; $i++) {
             \Illuminate\Support\Facades\Cache::forget("messages_feed_page_{$i}");
         }
+
+        event(new UserProfileUpdated($user));
 
         return Redirect::route('profile.edit')->with('status', 'photo-deleted');
     }

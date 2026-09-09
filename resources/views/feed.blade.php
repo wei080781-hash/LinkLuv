@@ -265,6 +265,15 @@
     function setupEcho() {
         // 公開頻道：畫面渲染用（貼文/回覆/刪除/按讚）
         window.Echo.channel('wall-channel')
+            .listen('.user.profile.updated', (e) => {
+                // 搜尋畫面上所有該使用者的 <img data-user-id="X"> 或選取器並替換 src
+                const userAvatars = document.querySelectorAll(`.user-avatar-${e.user.id}`);
+                userAvatars.forEach(img => {
+                    img.src = e.user.profile_photo_url;
+                });
+            })
+
+
             .listen('.message.created', (e) => {
                 handleNewMessage(e.message);
             })
@@ -634,7 +643,7 @@
                 <img src="${msg.user.profile_photo_url}" class="w-10 h-10 rounded-full object-cover flex-shrink-0">
                 <div class="w-0.5 flex-1 bg-gray-300 mt-1 rounded-full min-h-3"></div>
                </div>`
-            : `<img src="${msg.user.profile_photo_url}" class="w-10 h-10 rounded-full object-cover flex-shrink-0">`;
+            : `<img src="${msg.user.profile_photo_url}" class="w-10 h-10 rounded-full object-cover flex-shrink-0 user-avatar-${msg.user_id}">`;
 
         const toggleBtn = hasReplies
             ? `<button onclick="toggleReplies(${msg.id}, ${count})" id="tbtn-${msg.id}" class="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700 mt-1 select-none bg-transparent border-none cursor-pointer p-0">
@@ -724,7 +733,7 @@
         return `
         <div id="msg-${msg.id}" class="reply-branch relative pt-2.5" data-id="${msg.id}" data-parent-id="${msg.parent_id || ''}">
             <div class="flex items-start gap-2">
-                <img src="${msg.user.profile_photo_url}" class="w-7 h-7 rounded-full object-cover flex-shrink-0 mt-0.5 relative z-10">
+                : `<img src="${msg.user.profile_photo_url}" class="w-10 h-10 rounded-full object-cover flex-shrink-0 user-avatar-${msg.user_id}">`;
                 <div class="flex-1 min-w-0">
                     <div class="msg-bubble bg-gray-50 hover:bg-gray-100 border border-gray-100 rounded-2xl px-3 py-2">
                         <div class="flex items-baseline gap-1 flex-wrap mb-0.5">
