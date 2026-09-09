@@ -64,6 +64,12 @@ class ProfileController extends Controller
 
         $user->save();
 
+
+        // 【新增】頭像或名稱可能改變，留言板快取裡的 user 關聯資料已過期，需要清除
+        for ($i = 1; $i <= 10; $i++) {
+            \Illuminate\Support\Facades\Cache::forget("messages_feed_page_{$i}");
+        }
+
         // 記錄：更新流程結束
         Log::info("Profile Update Completed: User ID {$user->id} saved successfully.");
         return Redirect::route('profile.edit')->with('status', 'profile-updated');
@@ -99,6 +105,11 @@ class ProfileController extends Controller
     {
         $this->photoService->delete($request->user());
         $request->user()->save();
+
+        // 【新增】同步清除留言板快取
+        for ($i = 1; $i <= 10; $i++) {
+            \Illuminate\Support\Facades\Cache::forget("messages_feed_page_{$i}");
+        }
 
         return Redirect::route('profile.edit')->with('status', 'photo-deleted');
     }
