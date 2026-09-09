@@ -266,11 +266,17 @@
         // 公開頻道：畫面渲染用（貼文/回覆/刪除/按讚）
         window.Echo.channel('wall-channel')
             .listen('.user.profile.updated', (e) => {
-                console.log('收到大頭貼更新廣播！', e);
+                console.log('收到廣播資料：', e);
+
                 // 搜尋畫面上所有該使用者的 <img data-user-id="X"> 或選取器並替換 src
                 const userAvatars = document.querySelectorAll(`.user-avatar-${e.user.id}`);
+                console.log(`找到 ${userAvatars.length} 張要替換的大頭貼，使用者 ID: ${e.user.id}`);
+
+                // 🎯 2. 執行替換並加上時間戳記
                 userAvatars.forEach(img => {
+                    console.log('替換前網址：', img.src);
                     img.src = e.user.profile_photo_url + '?t=' + new Date().getTime();
+                    console.log('替換後網址：', img.src);
                 });
             })
 
