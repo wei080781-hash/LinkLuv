@@ -185,12 +185,12 @@ class MessageController extends Controller
             'thread_id' => $threadId,
         ]);
 
-        // 如果是回覆，更新根貼文的 Feed 排序時間
-        if ($parentId) {
-           Message::where('id', $threadId)->update([
-               'feed_order_at' => now(),
-            ]);
-        }
+        // // 如果是回覆，更新根貼文的 Feed 排序時間
+        // if ($parentId) {
+        //    Message::where('id', $threadId)->update([
+        //        'feed_order_at' => now(),
+        //     ]);
+        // }
 
         // 清除快取並回傳
         for ($i = 1; $i <= 10; $i++) {
