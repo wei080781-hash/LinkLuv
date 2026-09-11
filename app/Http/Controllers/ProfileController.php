@@ -44,13 +44,6 @@ class ProfileController extends Controller
         // 3. 填入姓名與 Email 等基本資料
         $user->fill($userData);
 
-        // 4. 處理 Email 變更時需要清除驗證狀態的邏輯
-        if ($user->isDirty('email')) {
-            // 記錄：偵測到 Email 變更
-            Log::info("Profile Update: Email change detected for User ID {$user->id}. Clearing email_verified_at.");
-            $user->email_verified_at = null;
-        }
-
         // 5. 【新增】處理頭像上傳 (透過您的 ProfilePhotoService)
         if ($request->hasFile('profile_photo')) {
             // 記錄：偵測到頭像上傳
@@ -108,6 +101,8 @@ class ProfileController extends Controller
     /**刪除使用者頭像 */
     public function deletePhoto(Request $request): RedirectResponse
     {
+        $user = $request->user();
+        
         $this->photoService->delete($request->user());
         $request->user()->save();
 

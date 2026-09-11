@@ -5,76 +5,55 @@
         </h2>
 
         <p class="mt-1 text-sm text-gray-600">
-            {{ __("更換大頭貼跟E-mail") }}
+            {{ __("更換大頭貼跟姓名") }}
         </p>
     </header>
 
-    <form id="send-verification" method="post" action="{{ route('verification.send') }}">
-        @csrf
-    </form>
-
+    {{-- 更新個人資料 Form --}}
     <form method="post" action="{{ route('profile.update') }}" enctype="multipart/form-data" class="mt-6 space-y-6">
         @csrf
         @method('patch')
 
         {{-- Profile Photo 區塊 --}}
-
-        <div class="flex items-center gap-6">
-            <div class="flex-shrink-0">
-                <img id="avatar-preview" 
-                src="{{ $user->profile_photo_url }}"
-                class="w-20 h-20 rounded-full object-cover border">
-            </div>
-
-            <div class="flex flex-col gap-2">
-                <label for="profile_photo" class="cursor-pointer px-4 py-2
-                bg-white border rounded-md text-sm hover:bg-gray-50">
-                   更換頭像
-                </label>
-                <input id="profile_photo" name="profile_photo" type="file" class="hidden" accept="image/*">
-
-                @if($user->profile_photo_path)
-                     <button type="button"
-                    onclick="document.getElementById('delete-photo-form').submit()"
-                    class="text-sm text-red-500 hover:text-red-700 text-left">
-                    移出頭像
-                </button>
-                @endif
-            </div>
         <div>
-        <x-input-error class="mt-2" :messages="$errors->get('profile_photo')" />    
+            {{-- 水平排列容器：左邊頭像，右邊按鈕 --}}
+            <div class="flex items-center gap-6">
+
+                {{-- 左側：頭像圖片 --}}
+                <div class="flex-shrink-0">
+                     <img id="avatar-preview" 
+                        src="{{ $user->profile_photo_url }}"
+                        class="w-20 h-20 rounded-full object-cover border">
+                </div>
+                {{-- 右側：按鈕區塊 --}}
+                <div class="flex flex-col gap-2">
+                    <label for="profile_photo" class="cursor-pointer px-4 py-2
+                    bg-white border rounded-md text-sm hover:bg-gray-50">
+                        更換頭像
+                    </label>
+                    <input id="profile_photo" name="profile_photo" type="file" class="hidden" accept="image/*">
+
+                    @if($user->profile_photo_path)
+                        <button type="button"
+                                onclick="document.getElementById('delete-photo-form').submit()"
+                                class="text-sm text-red-500 hover:text-red-700 text-left">
+                            移出頭像
+                        </button>
+                    @endif
+                </div>
+
+            </div>
+            <x-input-error class="mt-2" :messages="$errors->get('profile_photo')" />
+        </div>
+
+        {{-- 姓名 區塊 --}}
         <div>
             <x-input-label for="name" :value="__('Name')" />
             <x-text-input id="name" name="name" type="text" class="mt-1 block w-full" :value="old('name', $user->name)" required autofocus autocomplete="name" />
             <x-input-error class="mt-2" :messages="$errors->get('name')" />
         </div>
 
-        <div>
-            <x-input-label for="email" :value="__('Email')" />
-            <x-text-input id="email" name="email" type="email" class="mt-1 block w-full" :value="old('email', $user->email)" required autocomplete="username" />
-            <x-input-error class="mt-2" :messages="$errors->get('email')" />
-
-            @if ($user instanceof \Illuminate\Contracts\Auth\MustVerifyEmail && ! $user->hasVerifiedEmail())
-                <div>
-                    <p class="text-sm mt-2 text-gray-800">
-                        {{ __('Your email address is unverified.') }}
-
-                        <button form="send-verification" class="underline text-sm text-gray-600 hover:text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                            {{ __('Click here to re-send the verification email.') }}
-                        </button>
-                    </p>
-
-                    @if (session('status') === 'verification-link-sent')
-                        <p class="mt-2 font-medium text-sm text-green-600">
-                            {{ __('A new verification link has been sent to your email address.') }}
-                        </p>
-                    @endif
-                </div>
-            @endif
-        </div>
-    </div>
-    <x-input-error class="mt-2" :messages="$errors->get('profile_photo')" />
-
+        {{-- 儲存按鈕 區塊 --}}
         <div class="flex items-center gap-4">
             <x-primary-button>{{ __('Save') }}</x-primary-button>
 
