@@ -477,6 +477,9 @@
                 if (parent && parent.children) {
                     const idx = parent.children.findIndex(c => c.id === existing.id);
                     if (idx !== -1) parent.children[idx] = existing;
+
+                    // 💡 補上這行：讓轉檔完成更新 updated_at 的訊息也能即時重新排序
+                    parent.children.sort((a, b) => new Date(a.updated_at || a.created_at) - new Date(b.updated_at || b.created_at));
                 }
             }
             // 舊的
@@ -535,6 +538,9 @@
                 if (!trueParent.children.some(c => c.id === newMsg.id)) {
                     trueParent.children.push(newMsg);
                 }
+
+                // 如果要按「完成時間」由舊到新排序
+                trueParent.children.sort((a, b) => new Date(a.updated_at || a.created_at) - new Date(b.updated_at || b.created_at));
             }
 
             // 強制展開該根貼文的檢視狀態
