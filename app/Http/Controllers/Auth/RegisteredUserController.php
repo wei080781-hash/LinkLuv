@@ -30,10 +30,13 @@ class RegisteredUserController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
+        // 【修改】validate() 加上第二個參數,自訂 email.unique 的錯誤訊息
         $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:'.User::class],
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
+        ], [
+            'email.unique' => '此信箱已被註冊使用。',
         ]);
 
         $user = User::create([
