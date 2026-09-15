@@ -179,8 +179,8 @@ return [
     */
 
     'custom' => [
-        'attribute-name' => [
-            'rule-name' => 'custom-message',
+        'email' => [
+            'unique' => '此信箱已被註冊使用。',
         ],
     ],
 
