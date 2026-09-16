@@ -29,10 +29,14 @@ class PasswordResetLinkController extends Controller
         $request->validate([
             'email' => ['required', 'email'],
         ]);
+        
+        // 🔍 【新增安全檢查】：未驗證信箱不得使用忘記密碼功能
+        $user = \App\Models\User::where('email', $request->email)->first();
+        if ($user && ! $user->hasVerifiedEmail()) {
+            return back()->withInput($request->only('email'))
+                ->withErrors(['email' => '該信箱尚未完成驗證，無法使用忘記密碼功能。']);
+        }
 
-        // We will send the password reset link to this user. Once we have attempted
-        // to send the link, we will examine the response then see the message we
-        // need to show to the user. Finally, we'll send out a proper response.
         $status = Password::sendResetLink(
             $request->only('email')
         );
