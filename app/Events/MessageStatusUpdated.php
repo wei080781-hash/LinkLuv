@@ -41,6 +41,7 @@ class MessageStatusUpdated implements ShouldBroadcastNow
                 'image_path' => $this->message->image_path,
                 'created_at' => $this->message->created_at ? $this->message->created_at->toIso8601String() : null,
                 'media_type' => $this->message->media_type,
+                'feed_order_at' => $this->message->feed_order_at ? $this->message->feed_order_at->toIso8601String() : null,
                 // 💡 補上完整的 user 關聯包裹，重繪時頭像與名字絕不噴錯崩潰！
                 'user' => [
                     'name'              => $this->message->user?->name ?? '未知用戶',

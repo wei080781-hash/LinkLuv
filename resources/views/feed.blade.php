@@ -450,6 +450,16 @@
     //    所以這裡實際上不會再收到 status === 'processing' 的訊息了。
     // =========================================================
 
+    // 【新增】共用排序函式：所有回覆排序都用這個，確保一致
+    function sortChildrenDesc(children) {
+        return children.sort((a, b) => {
+            const timeA = new Date(a.feed_order_at || a.updated_at || a.created_at);
+            const timeB = new Date(b.feed_order_at || b.updated_at || b.created_at);
+            return timeB - timeA; // 降序：新在上，舊在下
+        });
+    }
+
+
     window.handleNewMessage = function(newMsg) {
         console.log("★★★★ 我改過 handleNewMessage 了 ★★★★");
         newMsg.id = Number(newMsg.id);
@@ -477,13 +487,11 @@
                     const idx = parent.children.findIndex(c => c.id === existing.id);
                     if (idx !== -1) parent.children[idx] = existing;
 
-                    // 💡 補上這行：讓轉檔完成更新 updated_at 的訊息也能即時重新排序
-                    parent.children.sort((a, b) => new Date(a.updated_at || a.created_at) - new Date(b.updated_at || b.created_at));
+                    
+                    parent.children = sortChildrenDesc(parent.children);
                 }
             }
-            // 舊的
-            // window.globalMsgMap.set(merged.id, merged);
-
+            
             // 新的
             window.globalMsgMap.set(existing.id, existing);
 
@@ -538,8 +546,8 @@
                     trueParent.children.push(newMsg);
                 }
 
-                // 如果要按「完成時間」由舊到新排序
-                trueParent.children.sort((a, b) => new Date(a.updated_at || a.created_at) - new Date(b.updated_at || b.created_at));
+                
+                trueParent.children = sortChildrenDesc(trueParent.children);
             }
 
             // 強制展開該根貼文的檢視狀態
