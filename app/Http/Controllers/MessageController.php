@@ -305,11 +305,16 @@ class MessageController extends Controller
 
         $messageId = $message->id; // 先記住 ID，刪除後就拿不到了
 
+        // ★【新增】刪除前先記住這則訊息的 parent_id 跟 thread_id（=主留言 ID）
+        // 一定要在 $message->delete() 之前拿，刪除後這些屬性就讀不到了
+        $parentId = $message->parent_id;
+        $rootId = $message->thread_id ?? $messageId; // 如果是主留言本身，thread_id 可能是 null，就用自己的 id
+
         $message->replies()->delete();
         $message->delete();
 
-        // 廣播通知所有人即時移除這則訊息
-        broadcast(new \App\Events\MessageDeleted($messageId))->toOthers();
+        // ★【修改】廣播時把 parentId、rootId 一起帶上，讓所有人的畫面都能收到正確答案，不用自己猜
+        broadcast(new \App\Events\MessageDeleted($messageId, $parentId, $rootId))->toOthers();
 
         for ($i = 1; $i <= 10; $i++) {
             Cache::forget("messages_feed_page_{$i}");
