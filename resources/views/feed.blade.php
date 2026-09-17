@@ -399,6 +399,21 @@
             return;
         }
 
+        // ★【新增】刪除前先從本地 globalMsgMap 往上追出真正的主留言 ID
+        // 不能只信任 e.rootId / e.parentId，因為後端目前的廣播事件沒有帶這兩個值
+        const findLocalRootId = (id) => {
+           let node = window.globalMsgMap.get(id);
+           let guard = 0; // 防止資料異常造成無限迴圈
+           while (node && node.parent_id != null && guard < 50) { 
+                const parentNode = window.globalMsgMap.get(node.parent_id);
+                if (!parentNode) break;
+                node = parentNode;
+                guard++;
+            }
+            return node ? node.id : null;
+        };
+        const localRootId = findLocalRootId(messageId);
+
         const collectDescendants = (id) => {
             const node = window.globalMsgMap.get(id);
             if (!node || !Array.isArray(node.children)) return [];
@@ -424,10 +439,11 @@
 
             window.globalMsgMap.delete(id);
         });
-
+        // ★【修改】優先順序改為：後端 rootId > 本地追溯到的 localRootId > parentId > messageId 自己
         const targetRootId = Number.isFinite(rootId)
             ? rootId
-            : (Number.isFinite(parentId) ? parentId : messageId);
+            : (Number.isFinite(localRootId) ? localRootId
+                : (Number.isFinite(parentId) ? parentId : messageId));
 
         const rootEl = document.getElementById(`msg-${targetRootId}`);
 
