@@ -20,10 +20,6 @@
                     @include('profile.partials.update-password-form')
                 </div>
             </div>
-
-                </div>
-                </div>
-            </div>
             
             {{-- 區塊 3：刪除帳號 (原本的) --}}
             <div class="p-4 sm:p-8 bg-white shadow sm:rounded-lg">
