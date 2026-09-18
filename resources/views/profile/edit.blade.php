@@ -15,11 +15,13 @@
             </div>
 
             {{-- 區塊 2：修改密碼 (原本的) --}}
+            @if (auth()->user()->provider === 'local')
             <div class="p-4 sm:p-8 bg-white shadow sm:rounded-lg">
                 <div class="max-w-xl">
                     @include('profile.partials.update-password-form')
                 </div>
             </div>
+            @endif
             
             {{-- 區塊 3：刪除帳號 (原本的) --}}
             <div class="p-4 sm:p-8 bg-white shadow sm:rounded-lg">
