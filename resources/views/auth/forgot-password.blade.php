@@ -1,6 +1,7 @@
 <x-guest-layout>
     <div class="mb-4 text-sm text-gray-600">
-        {{ __('忘記密碼了嗎？沒問題。只要輸入您的 Email，我們就會寄送密碼重設連結給您。') }}
+        {{ __('此功能僅適用於使用「信箱 + 密碼」登入的一般帳號。
+    若您是使用 Google 登入，請直接透過 Google 帳號管理密碼') }}
     </div>
 
     <!-- Session Status -->

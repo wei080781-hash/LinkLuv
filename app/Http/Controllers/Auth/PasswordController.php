@@ -18,6 +18,13 @@ class PasswordController extends Controller
 
         $user = $request->user();
 
+        if ($user->provider !== 'local') {
+          throw ValidationException::withMessages([
+            'password' => 'Google 帳號不允許在站內更新密碼。',
+         ]);
+
+        }
+        
         // 1. 基本驗證規則（新密碼與確認密碼）
         $rules = [
             'password' => ['required', Password::defaults(), 'confirmed'],
