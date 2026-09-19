@@ -666,6 +666,7 @@
         // 【新增】步驟 3：檢查 globalMsgMap 中是否有子訊息需要掛載到當前的父節點
         messages.forEach(m => {
             if (!m.parent_id) {  // 只處理根訊息
+                const rootNode = window.globalMsgMap.get(m.id);
                 // 找出所有 parent_id 等於這個根訊息 ID 的子訊息
                 Array.from(window.globalMsgMap.values()).forEach(child => {
                     if (child.parent_id === m.id && !m.children.some(c => c.id === child.id)) {
