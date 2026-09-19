@@ -671,7 +671,11 @@
                     if (child.parent_id === m.id && !m.children.some(c => c.id === child.id)) {
                         m.children.push(child);
                     }
+
                 });
+            }
+                    
+        });
 
         // 步驟 4：只對根訊息建立 DOM
         messages.forEach(m => {
