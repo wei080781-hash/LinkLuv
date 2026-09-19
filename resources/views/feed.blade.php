@@ -693,12 +693,6 @@
                 }
             }
         });
-
-        messages.forEach(m => {
-            if (!m.parent_id && !document.getElementById(`msg-${m.id}`)) {
-                list.insertAdjacentHTML('beforeend', buildRootHTML(window.globalMsgMap.get(m.id)));
-            }
-        });
     }
 
     // =========================================================
