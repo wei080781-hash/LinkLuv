@@ -677,6 +677,7 @@
                         if (!exists) {
                             rootNode.children.push(child);
                         }
+                    }
 
                 });
             }
