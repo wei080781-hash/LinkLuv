@@ -671,7 +671,7 @@
         console.log('執行後 694 的 children IDs:', root694.children ? root694.children.map(c => c.id) : 'no children');
 
          return result;
-    };
+    }
 
         const list = document.getElementById('messages-list');
 
