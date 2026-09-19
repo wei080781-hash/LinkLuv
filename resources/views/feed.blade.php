@@ -643,27 +643,28 @@
     }
 
     function appendMessages(messages) {
-    const list = document.getElementById('messages-list');
+        const list = document.getElementById('messages-list');
 
-    messages.forEach(m => indexToMap(m));
+        messages.forEach(m => indexToMap(m));
 
-    messages.forEach(m => {
-        if (m.parent_id) {
-            const parent = window.globalMsgMap.get(m.parent_id);
+        messages.forEach(m => {
+            if (m.parent_id) {
+                const parent = window.globalMsgMap.get(m.parent_id);
             if (parent && !parent.children.some(c => c.id === m.id)) {
                 parent.children.push(window.globalMsgMap.get(m.id));
             }
         }
     });
 
+    // 【修改】先執行 fixMissingChildren，再建立 DOM
+    fixMissingChildren();
+
     messages.forEach(m => {
         if (!m.parent_id && !document.getElementById(`msg-${m.id}`)) {
             list.insertAdjacentHTML('beforeend', buildRootHTML(window.globalMsgMap.get(m.id)));
         }
     });
-
-    // 【新增】執行完畢後，檢查是否有根節點需要掛載已有的子訊息
-    fixMissingChildren();
+    
 }
 
 
