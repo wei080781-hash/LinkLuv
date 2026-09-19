@@ -667,11 +667,16 @@
         messages.forEach(m => {
             if (!m.parent_id) {  // 只處理根訊息
                 const rootNode = window.globalMsgMap.get(m.id);
+                if (!rootNode || !rootNode.children) return;
+
                 // 找出所有 parent_id 等於這個根訊息 ID 的子訊息
                 Array.from(window.globalMsgMap.values()).forEach(child => {
-                    if (child.parent_id === m.id && !m.children.some(c => c.id === child.id)) {
-                        m.children.push(child);
-                    }
+                    if (child.parent_id === m.id) {
+                        const exists = rootNode.children.some(c => c && c.id === child.id);
+
+                        if (!exists) {
+                            rootNode.children.push(child);
+                        }
 
                 });
             }
