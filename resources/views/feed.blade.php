@@ -643,6 +643,17 @@
     }
 
     function appendMessages(messages) {
+
+        console.log('★★★ appendMessages 被呼叫 ★★★');
+    
+        // 找出 694 和 746-795 在這批 messages 中的索引位置
+        const idx694 = messages.findIndex(m => m.id === 694);
+        const idxChildren = [746,747,748,749,750,786,789,795]
+            .map(id => ({ id, idx: messages.findIndex(m => m.id === id) }))
+            .filter(x => x.idx !== -1);
+        
+        console.log('694 的索引:', idx694);
+        console.log('746-795 的索引:', idxChildren);
         const list = document.getElementById('messages-list');
 
         messages.forEach(m => indexToMap(m));
