@@ -648,27 +648,32 @@
         console.log('收到 messages 數量:', messages.length);
         console.log('message IDs:', messages.map(m => m.id));
 
-        // 檢查這批 messages 中有没有 694 或 746-795
-        const has694 = messages.some(m => m.id === 694);
-        const hasChildren = messages.some(m =>
-        [746,747,748,749,750,786,789,795].includes(m.id));
-        console.log('這批有 694 嗎？', has694);
-        console.log('這批有 746-795 嗎？', hasChildren);
-
-        // 找出 694 和 746-795 在這批 messages 中的索引位置
-        const idx694 = messages.findIndex(m => m.id === 694);
-        const idxChildren = [746,747,748,749,750,786,789,795]
-            .map(id => ({ id, idx: messages.findIndex(m => m.id === id) }))
-            .filter(x => x.idx !== -1);
-
-            console.log('694 的索引:', idx694);
-            console.log('746-795 的索引:', idxChildren);
-
-        //原始邏輯
         const list = document.getElementById('messages-list');
 
+        //先把所有訊息放進 globalMsgMap
         messages.forEach(m => indexToMap(m));
 
+        // 步驟 2：把當前 messages 中的子訊息掛到 parent
+        messages.forEach(m => {
+            if (m.parent_id) {
+                const parent = window.globalMsgMap.get(m.parent_id);
+                if (parent && !parent.children.some(c => c.id === m.id)) {
+                    parent.children.push(window.globalMsgMap.get(m.id));
+                }
+            }
+        });
+
+        // 【新增】步驟 3：檢查 globalMsgMap 中是否有子訊息需要掛載到當前的父節點
+        messages.forEach(m => {
+            if (!m.parent_id) {  // 只處理根訊息
+                // 找出所有 parent_id 等於這個根訊息 ID 的子訊息
+                Array.from(window.globalMsgMap.values()).forEach(child => {
+                    if (child.parent_id === m.id && !m.children.some(c => c.id === child.id)) {
+                        m.children.push(child);
+                    }
+                });
+
+        // 步驟 4：只對根訊息建立 DOM
         messages.forEach(m => {
             if (m.parent_id) {
                 const parent = window.globalMsgMap.get(m.parent_id);
