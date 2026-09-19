@@ -661,7 +661,30 @@
             list.insertAdjacentHTML('beforeend', buildRootHTML(window.globalMsgMap.get(m.id)));
         }
     });
+
+    // 【新增】執行完畢後，檢查是否有根節點需要掛載已有的子訊息
+    fixMissingChildren();
 }
+
+
+function fixMissingChildren() {
+    // 掃描所有根節點（parent_id === null）
+    Array.from(window.globalMsgMap.values()).forEach(node => {
+        if (!node.parent_id && node.children) {
+           // 找出所有 parent_id 等於這個根節點 ID 的子訊息
+           Array.from(window.globalMsgMap.values()).forEach(child => {
+              if (child.parent_id === node.id) {
+                  const exists = node.children.some(c => c.id === child.id);
+                  if (!exists) {
+                        node.children.push(child);
+                    }
+                }
+            });
+        }
+    });
+}
+
+
 
     // =========================================================
     // 7. HTML 建構函式
