@@ -643,57 +643,25 @@
     }
 
     function appendMessages(messages) {
+    const list = document.getElementById('messages-list');
 
-        console.log('★★★ appendMessages 被呼叫 ★★★');
-        console.log('收到 messages 數量:', messages.length);
-        console.log('message IDs:', messages.map(m => m.id));
+    messages.forEach(m => indexToMap(m));
 
-        const list = document.getElementById('messages-list');
-
-        //先把所有訊息放進 globalMsgMap
-        messages.forEach(m => indexToMap(m));
-
-        // 步驟 2：把當前 messages 中的子訊息掛到 parent
-        messages.forEach(m => {
-            if (m.parent_id) {
-                const parent = window.globalMsgMap.get(m.parent_id);
-                if (parent && !parent.children.some(c => c.id === m.id)) {
-                    parent.children.push(window.globalMsgMap.get(m.id));
-                }
+    messages.forEach(m => {
+        if (m.parent_id) {
+            const parent = window.globalMsgMap.get(m.parent_id);
+            if (parent && !parent.children.some(c => c.id === m.id)) {
+                parent.children.push(window.globalMsgMap.get(m.id));
             }
-        });
+        }
+    });
 
-        // 【新增】步驟 3：檢查 globalMsgMap 中是否有子訊息需要掛載到當前的父節點
-        messages.forEach(m => {
-            if (!m.parent_id) {  // 只處理根訊息
-                const rootNode = window.globalMsgMap.get(m.id);
-                if (!rootNode || !rootNode.children) return;
-
-                // 找出所有 parent_id 等於這個根訊息 ID 的子訊息
-                Array.from(window.globalMsgMap.values()).forEach(child => {
-                    if (child.parent_id === m.id) {
-                        const exists = rootNode.children.some(c => c && c.id === child.id);
-
-                        if (!exists) {
-                            rootNode.children.push(child);
-                        }
-                    }
-
-                });
-            }
-                    
-        });
-
-        // 步驟 4：只對根訊息建立 DOM
-        messages.forEach(m => {
-            if (m.parent_id) {
-                const parent = window.globalMsgMap.get(m.parent_id);
-                if (parent && !parent.children.some(c => c.id === m.id)) {
-                    parent.children.push(window.globalMsgMap.get(m.id));
-                }
-            }
-        });
-    }
+    messages.forEach(m => {
+        if (!m.parent_id && !document.getElementById(`msg-${m.id}`)) {
+            list.insertAdjacentHTML('beforeend', buildRootHTML(window.globalMsgMap.get(m.id)));
+        }
+    });
+}
 
     // =========================================================
     // 7. HTML 建構函式
