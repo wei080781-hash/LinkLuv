@@ -646,11 +646,12 @@
 
         console.log('★★★ appendMessages 被呼叫 ★★★');
         console.log('收到 messages 數量:', messages.length);
-        cconsole.log('message IDs:', messages.map(m => m.id));
+        console.log('message IDs:', messages.map(m => m.id));
 
         // 檢查這批 messages 中有没有 694 或 746-795
         const has694 = messages.some(m => m.id === 694);
-        const hasChildren = messages.some(m =>[746,747,748,749,750,786,789,795].includes(m.id));
+        const hasChildren = messages.some(m =>
+        [746,747,748,749,750,786,789,795].includes(m.id));
         console.log('這批有 694 嗎？', has694);
         console.log('這批有 746-795 嗎？', hasChildren);
 
@@ -663,7 +664,7 @@
             console.log('694 的索引:', idx694);
             console.log('746-795 的索引:', idxChildren);
 
-        原始邏輯
+        //原始邏輯
         const list = document.getElementById('messages-list');
 
         messages.forEach(m => indexToMap(m));
