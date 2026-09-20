@@ -19,16 +19,14 @@ class MessageController extends Controller
         $perPage = 20;
 
         // 1. 從 Redis 讀取全域訊息快取 (若無則查詢 DB 並存入 1 小時)
-        $messages = Cache::remember("messages_feed_page_{$page}", 60, function () use ($page, $perPage) {
-             return Message::with(['user', 'parent.user'])
-                 ->withCount('likes')
-                //  新增
+        $cached = Cache::remember("messages_feed_page_{$page}", 60, function () use ($page, $perPage) {
+             // 只對「根貼文」分頁，這樣每一頁都保證有 20 則根貼文
+            $roots = Message::with(['user', 'parent.user'])
+                ->withCount('likes')
                 ->where('status', 'ready')
-                 // ★ 關鍵排序改動：
-                 ->orderByDesc('feed_order_at')
-                 ->orderBy('thread_id', 'DESC') // 1. 讓最新發布的討論串（主留言）永遠排在最上面
-                 ->orderBy('path', 'ASC')       // 2. 在同一個討論串內部，依照物化路徑正序排，確保父在子前
-                 ->paginate($perPage, ['*'], 'page', $page);
+                ->whereNull('parent_id')
+                ->orderByDesc('feed_order_at')
+                ->paginate($perPage, ['*'], 'page', $page);
 
                 // 撈出這些根貼文底下的所有回覆
                 $replies = Message::with(['user', 'parent.user'])
@@ -72,7 +70,7 @@ class MessageController extends Controller
         return response()->json([
             'data' => $items,
             'has_more' => $cached['has_more'],
-            'next_page' => $messages->currentPage() + 1,
+            'next_page' => $cached['current_page'] + 1,
         ]);    
     }
 
