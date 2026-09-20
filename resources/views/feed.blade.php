@@ -627,6 +627,11 @@
                     const sentinel = document.getElementById('scroll-sentinel');
                     if (sentinel) sentinel.innerHTML = '<span class="text-sm text-gray-300">已顯示全部訊息</span>';
                 }
+            })
+            .catch(err => {
+                console.error('載入訊息失敗：', err);
+                isLoading = false;
+                document.getElementById('loading-indicator').classList.add('hidden');
             });
     }
 

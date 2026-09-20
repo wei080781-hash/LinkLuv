@@ -29,6 +29,22 @@ class MessageController extends Controller
                  ->orderBy('thread_id', 'DESC') // 1. 讓最新發布的討論串（主留言）永遠排在最上面
                  ->orderBy('path', 'ASC')       // 2. 在同一個討論串內部，依照物化路徑正序排，確保父在子前
                  ->paginate($perPage, ['*'], 'page', $page);
+
+                // 撈出這些根貼文底下的所有回覆
+                $replies = Message::with(['user', 'parent.user'])
+                    ->withCount('likes')
+                    ->where('status', 'ready')
+                    ->whereNotNull('parent_id')
+                    ->whereIn('thread_id', $roots->pluck('id'))
+                    ->orderByDesc('feed_order_at')
+                    ->orderBy('path', 'ASC')
+                    ->get();
+
+               return [
+                  'items' => $roots->getCollection()->concat($replies)->values(),
+                  'has_more' => $roots->hasMorePages(),
+                  'current_page' => $roots->currentPage(),
+                ];
          });
 
          // 2. 獲取目前用戶的點讚清單 (不快取，因為每個人不同)
@@ -37,7 +53,7 @@ class MessageController extends Controller
             : [];
 
         
-        $items = collect($messages->items())->map(function ($msg) use ($likedIds) {
+        $items = $cached['items']->map(function ($msg) use ($likedIds) {
             $msg->is_liked = isset($likedIds[$msg->id]);
             // 提供前端 @mention 使用
             $msg->parent_user_name = $msg->parent?->user?->name ?? null;
@@ -51,9 +67,11 @@ class MessageController extends Controller
 
             return $msg;
         });
+
+
         return response()->json([
             'data' => $items,
-            'has_more' => $messages->hasMorePages(),
+            'has_more' => $cached['has_more'],
             'next_page' => $messages->currentPage() + 1,
         ]);    
     }
