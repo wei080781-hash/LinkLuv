@@ -1291,6 +1291,11 @@ function fixMissingChildren() {
         e.preventDefault();
 
         const form = e.target;
+        // 【新增】防止重複送出：這個表單正在送出中就直接忽略
+        if (form.dataset.submitting === '1') {
+            return;
+        }
+
         const fileInput = form.querySelector('input[type="file"]');
 
         const file = fileInput && fileInput.files && fileInput.files[0];
@@ -1334,6 +1339,11 @@ function fixMissingChildren() {
                 pushToast('圖片上傳中...', 'processing', 2500);
             }
         }
+
+        // 【新增】通過所有檢查後，立刻鎖住表單並停用送出按鈕
+        const submitBtn = form.querySelector('button[type="submit"]');
+        form.dataset.submitting = '1';
+        if (submitBtn) submitBtn.disabled = true;
 
         const xhr = new XMLHttpRequest();
 
@@ -1458,7 +1468,11 @@ function fixMissingChildren() {
             alert('網路異常，請稍後再試');
         }
     };
-        
+        // 【新增】不論成功、失敗或中斷，請求結束後都解鎖
+        xhr.onloadend = function() {
+            form.dataset.submitting = '';
+            if (submitBtn) submitBtn.disabled = false;
+        };
 
         xhr.send(new FormData(form));
 };
