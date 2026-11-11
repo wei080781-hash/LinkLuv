@@ -865,7 +865,7 @@ function fixMissingChildren() {
     }
 
     function buildMediaHtml(msg) {
-        const s3BaseUrl = 'https://linkluv-media-bucket.s3.ap-east-2.amazonaws.com/';
+        const s3BaseUrl = "https://{{ config('filesystems.disks.s3.bucket') }}.s3.{{ config('filesystems.disks.s3.region') }}.amazonaws.com/";
 
         if (msg.media_type === 'image' && msg.image_path) {
             const isS3 = msg.image_path.startsWith('images/') || !msg.image_path.startsWith('storage/');
